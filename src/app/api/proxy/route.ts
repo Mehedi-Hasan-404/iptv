@@ -3,7 +3,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
-  // Get the target stream URL from the query parameters
   const { searchParams } = new URL(request.url);
   const streamUrl = searchParams.get('url');
 
@@ -11,9 +10,16 @@ export async function GET(request: NextRequest) {
     return new NextResponse('Missing stream URL', { status: 400 });
   }
 
+  // --- START OF CHANGES ---
+  // Create custom headers to make our request look like a real browser
+  const headers = new Headers();
+  headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+  headers.set('Referer', new URL(streamUrl).origin); // Set a plausible referer
+  // --- END OF CHANGES ---
+
   try {
-    // Fetch the M3U8 stream from the original source
-    const response = await fetch(streamUrl);
+    // Make the fetch request using our custom headers
+    const response = await fetch(streamUrl, { headers: headers });
 
     if (!response.ok) {
       return new NextResponse(`Failed to fetch stream: ${response.statusText}`, {
@@ -21,10 +27,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Create a new response, streaming the body from the original
     const newHeaders = new Headers(response.headers);
-
-    // This is the magic part: add the CORS header
     newHeaders.set('Access-Control-Allow-Origin', '*');
     newHeaders.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
     newHeaders.set('Access-Control-Allow-Headers', 'Content-Type');
