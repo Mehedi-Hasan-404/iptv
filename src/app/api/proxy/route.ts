@@ -43,7 +43,4 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Add this configuration to tell Vercel this is a streaming endpoint
-export const config = {
-  runtime: 'edge',
-};
+export const runtime = 'edge';
