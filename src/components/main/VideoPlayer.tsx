@@ -18,6 +18,7 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
 
   useEffect(() => setIsClient(true), []);
 
+  // Use the proxy for the stream URL
   const proxiedUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}`;
 
   const toggleFullscreen = () => {
@@ -58,15 +59,8 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
             onError={handlePlayerError}
             config={{
               file: {
+                // This is the most important setting for HLS
                 forceHLS: true,
-                // --- START OF NEW CONFIG ---
-                // This tells hls.js how to process the rewritten playlist
-                hlsOptions: {
-                  // This function will be called for every line in the M3U8
-                  // It ensures our proxy is correctly prepended
-                  url: proxiedUrl 
-                },
-                // --- END OF NEW CONFIG ---
               },
             }}
           />
@@ -85,21 +79,7 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
               <div className="live-indicator">LIVE</div>
             </div>
             <div className="custom-controls">
-              <div className="controls-bottom">
-                <div className="controls-left">
-                  <button className="control-button" onClick={() => setPlaying(!playing)}>
-                    {playing ? <PauseIcon /> : <PlayIcon />}
-                  </button>
-                  <button className="control-button" onClick={() => setMuted(!muted)}>
-                    {muted ? <VolumeMuteIcon /> : <VolumeMaxIcon />}
-                  </button>
-                </div>
-                <div className="controls-right">
-                  <button className="control-button" onClick={toggleFullscreen}>
-                    {fullscreen ? <FullscreenExitIcon /> : <FullscreenEnterIcon />}
-                  </button>
-                </div>
-              </div>
+              {/* ... your controls ... */}
             </div>
           </>
         )}
