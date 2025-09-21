@@ -3,6 +3,7 @@ export interface Category {
   id: string;
   name: string;
   iconUrl: string;
+  slug: string;
 }
 
 // Type for public channel data (safe to send to client)
