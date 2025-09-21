@@ -4,6 +4,15 @@ import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, order
 import { db } from '@/lib/firebase/client';
 import { Category } from '@/types';
 
+// Helper function to create a URL-friendly slug
+const createSlug = (name: string) => {
+  return name
+    .toLowerCase()
+    .replace(/&/g, 'and') // replace & with 'and'
+    .replace(/[^a-z0-9]+/g, '-') // replace non-alphanumeric characters with a hyphen
+    .replace(/^-+|-+$/g, ''); // remove leading or trailing hyphens
+};
+
 export default function CategoryManager() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [current, setCurrent] = useState<{ id?: string; name: string; iconUrl: string }>({ name: '', iconUrl: '' });
@@ -19,10 +28,22 @@ export default function CategoryManager() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    const slug = createSlug(current.name); // Generate the slug from the name
+    if (!slug) {
+        alert("Category name cannot be empty or invalid.");
+        return;
+    }
+
+    const dataToSave = {
+        name: current.name,
+        iconUrl: current.iconUrl,
+        slug: slug // Include the slug when saving data
+    };
+
     if (isEditing && current.id) {
-      await updateDoc(doc(db, 'categories', current.id), { name: current.name, iconUrl: current.iconUrl });
+      await updateDoc(doc(db, 'categories', current.id), dataToSave);
     } else {
-      await addDoc(collection(db, 'categories'), { name: current.name, iconUrl: current.iconUrl });
+      await addDoc(collection(db, 'categories'), dataToSave);
     }
     resetForm();
   };
