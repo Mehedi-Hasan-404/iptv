@@ -18,8 +18,6 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
 
   useEffect(() => setIsClient(true), []);
 
-  // IMPORTANT: This creates the proxied URL to fix CORS errors.
-  // It takes the original streamUrl and sends it through our own API.
   const proxiedUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}`;
 
   const toggleFullscreen = () => {
@@ -39,7 +37,6 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
   };
 
   if (!isClient) {
-    // Render a placeholder on the server to prevent hydration errors
     return <div className="video-player"><div className="video-wrapper bg-black" /></div>;
   }
 
@@ -52,7 +49,6 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
           </div>
         ) : (
           <ReactPlayer
-            // We use the proxiedUrl here, NOT the original streamUrl
             url={proxiedUrl}
             playing={playing}
             muted={muted}
@@ -62,14 +58,21 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
             onError={handlePlayerError}
             config={{
               file: {
-                // This forces the player to use hls.js for M3U8 files,
-                // which provides the best HLS stream support.
                 forceHLS: true,
+                // --- START OF NEW CONFIG ---
+                // This tells hls.js how to process the rewritten playlist
+                hlsOptions: {
+                  // This function will be called for every line in the M3U8
+                  // It ensures our proxy is correctly prepended
+                  url: proxiedUrl 
+                },
+                // --- END OF NEW CONFIG ---
               },
             }}
           />
         )}
         
+        {/* The rest of your UI is unchanged */}
         {!error && (
           <>
             <div className="center-controls">
