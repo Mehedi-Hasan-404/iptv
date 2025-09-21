@@ -1,8 +1,13 @@
+// src/app/(main)/category/[categoryId]/page.tsx
+
 import { collection, getDocs, query, where, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { PublicChannel, Category } from '@/types';
 import ChannelGrid from '@/components/main/ChannelGrid';
 import { notFound } from 'next/navigation';
+
+// ADD THIS LINE
+export const dynamic = 'force-dynamic';
 
 interface CategoryPageProps {
   params: { categoryId: string };
@@ -16,6 +21,7 @@ async function getCategoryDetails(categoryId: string): Promise<Category | null> 
 
 async function getChannelsForCategory(categoryId: string): Promise<PublicChannel[]> {
   const channelsCol = collection(db, 'channels');
+  // This query is now safe because the page is dynamic
   const q = query(channelsCol, where('categoryId', '==', categoryId), orderBy('name'));
   const snapshot = await getDocs(q);
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as PublicChannel[];
