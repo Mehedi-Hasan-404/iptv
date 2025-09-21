@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
-import ReactPlayer from 'react-player/lazy';
+import Hls from 'hls.js';
 import { PauseIcon, PlayIcon, FullscreenEnterIcon, FullscreenExitIcon, VolumeMaxIcon, VolumeMuteIcon } from './Icons';
 
 interface VideoPlayerProps {
@@ -10,16 +10,74 @@ interface VideoPlayerProps {
 
 const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
   const [isClient, setIsClient] = useState(false);
+  const playerWrapperRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  
+  // State for our custom controls
   const [playing, setPlaying] = useState(true);
   const [muted, setMuted] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const playerWrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => setIsClient(true), []);
 
-  // Use the proxy for the stream URL
-  const proxiedUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}`;
+  useEffect(() => {
+    if (!videoRef.current || !isClient) return;
+
+    const videoElement = videoRef.current;
+    let hls: Hls | null = null;
+    const proxiedUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}`;
+
+    if (Hls.isSupported()) {
+      hls = new Hls();
+      hls.loadSource(proxiedUrl);
+      hls.attachMedia(videoElement);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        videoElement.play().catch(() => {
+          console.warn('User interaction may be needed to play video.');
+        });
+      });
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          console.error('HLS.js Fatal Error:', data);
+          setError('This stream could not be played. It might be offline or restricted.');
+        }
+      });
+    } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+      // For native HLS support (like Safari)
+      videoElement.src = proxiedUrl;
+      videoElement.addEventListener('loadedmetadata', () => {
+        videoElement.play();
+      });
+    }
+
+    // Cleanup function to destroy the HLS instance when the component unmounts
+    return () => {
+      if (hls) {
+        hls.destroy();
+      }
+    };
+  }, [streamUrl, isClient]);
+  
+  // Functions to control the <video> element
+  const handlePlayPause = () => {
+    if (videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play();
+        setPlaying(true);
+      } else {
+        videoRef.current.pause();
+        setPlaying(false);
+      }
+    }
+  };
+
+  const handleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !videoRef.current.muted;
+      setMuted(videoRef.current.muted);
+    }
+  };
 
   const toggleFullscreen = () => {
     if (!playerWrapperRef.current) return;
@@ -31,16 +89,11 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
       setFullscreen(false);
     }
   };
-  
-  const handlePlayerError = (e: any) => {
-      console.error('ReactPlayer Error:', e);
-      setError('This stream could not be played. It may be offline or restricted.');
-  };
 
   if (!isClient) {
     return <div className="video-player"><div className="video-wrapper bg-black" /></div>;
   }
-
+  
   return (
     <div ref={playerWrapperRef} className="video-player show-controls playing">
       <div className="video-wrapper">
@@ -49,28 +102,23 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
             <p>{error}</p>
           </div>
         ) : (
-          <ReactPlayer
-            url={proxiedUrl}
-            playing={playing}
+          <video
+            ref={videoRef}
+            autoPlay
             muted={muted}
+            playsInline
             width="100%"
             height="100%"
-            controls={false}
-            onError={handlePlayerError}
-            config={{
-              file: {
-                // This is the most important setting for HLS
-                forceHLS: true,
-              },
-            }}
+            style={{ objectFit: 'contain' }}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
           />
         )}
         
-        {/* The rest of your UI is unchanged */}
         {!error && (
           <>
             <div className="center-controls">
-              <button className="center-play-btn" onClick={() => setPlaying(!playing)}>
+              <button className="center-play-btn" onClick={handlePlayPause}>
                 {playing ? <PauseIcon /> : <PlayIcon />}
               </button>
             </div>
@@ -79,7 +127,21 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
               <div className="live-indicator">LIVE</div>
             </div>
             <div className="custom-controls">
-              {/* ... your controls ... */}
+              <div className="controls-bottom">
+                <div className="controls-left">
+                  <button className="control-button" onClick={handlePlayPause}>
+                    {playing ? <PauseIcon /> : <PlayIcon />}
+                  </button>
+                  <button className="control-button" onClick={handleMute}>
+                    {muted ? <VolumeMuteIcon /> : <VolumeMaxIcon />}
+                  </button>
+                </div>
+                <div className="controls-right">
+                  <button className="control-button" onClick={toggleFullscreen}>
+                    {fullscreen ? <FullscreenExitIcon /> : <FullscreenEnterIcon />}
+                  </button>
+                </div>
+              </div>
             </div>
           </>
         )}
