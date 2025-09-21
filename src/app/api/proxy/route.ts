@@ -1,46 +1,59 @@
 // src/app/api/proxy/route.ts
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next-server';
+
+export const runtime = 'edge';
 
 export async function GET(request: NextRequest) {
-  const streamUrl = request.nextUrl.searchParams.get('url');
+  const streamUrlString = request.nextUrl.searchParams.get('url');
 
-  if (!streamUrl) {
+  if (!streamUrlString) {
     return new NextResponse('Missing stream URL', { status: 400 });
   }
 
   try {
-    // Fetch the stream with a standard browser User-Agent
-    const response = await fetch(streamUrl, {
+    const streamUrl = new URL(streamUrlString);
+    
+    // Fetch the content from the original source
+    const response = await fetch(streamUrl.toString(), {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Referer': streamUrl.origin,
       },
-      // Important: Vercel hobby plan has a 10-second timeout. This is a known issue.
-      // We can't fix the timeout, but we ensure the request is clean.
     });
 
-    // Check if the fetch was successful
     if (!response.ok) {
-      console.error(`Proxy failed for ${streamUrl}. Status: ${response.status}`);
-      return new NextResponse(`Upstream server returned an error: ${response.status}`, { status: response.status });
+      return new NextResponse(`Upstream fetch failed: ${response.status}`, { status: response.status });
     }
 
-    // Create a new response with the stream's body and headers
+    const contentType = response.headers.get('content-type') || '';
     const newHeaders = new Headers(response.headers);
-    
-    // Add the crucial CORS header
     newHeaders.set('Access-Control-Allow-Origin', '*');
-    
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: newHeaders,
-    });
+    newHeaders.set('Access-Control-Allow-Methods', 'GET');
+
+    // Check if the content is an M3U8 playlist
+    if (contentType.includes('mpegurl') || streamUrl.pathname.endsWith('.m3u8')) {
+      let playlistText = await response.text();
+      const baseUrl = new URL('.', streamUrl);
+
+      // Rewrite URLs within the playlist
+      const rewrittenPlaylist = playlistText.split('\n').map(line => {
+        const trimmedLine = line.trim();
+        if (trimmedLine && !trimmedLine.startsWith('#')) {
+          const absoluteUrl = new URL(trimmedLine, baseUrl);
+          return `/api/proxy?url=${encodeURIComponent(absoluteUrl.href)}`;
+        }
+        return line;
+      }).join('\n');
+      
+      return new NextResponse(rewrittenPlaylist, { status: 200, headers: newHeaders });
+    }
+
+    // If it's not a playlist (e.g., a video chunk), just stream it through
+    return new NextResponse(response.body, { status: 200, headers: newHeaders });
 
   } catch (error) {
-    console.error('A critical error occurred in the proxy fetch.', error);
+    console.error('Proxy internal error:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
-
-export const runtime = 'edge';
