@@ -3,6 +3,9 @@ import { db } from '@/lib/firebase/client';
 import { Category } from '@/types';
 import CategoryCard from '@/components/main/CategoryCard';
 
+// ADD THIS LINE to ensure the page always fetches fresh data
+export const dynamic = 'force-dynamic';
+
 async function getCategories(): Promise<Category[]> {
   const categoriesCol = collection(db, 'categories');
   const q = query(categoriesCol, orderBy('name', 'asc'));
