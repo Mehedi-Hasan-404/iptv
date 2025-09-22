@@ -1,10 +1,7 @@
-// /src/app/(main)/page.tsx
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { Category, PublicChannel } from '@/types';
 import CategoryCard from '@/components/main/CategoryCard';
-import FavoritesSection from '@/components/main/FavoritesSection';
-import RecentSection from '@/components/main/RecentSection';
 import ChannelGrid from '@/components/main/ChannelGrid';
 
 async function getCategories(): Promise<Category[]> {
@@ -35,12 +32,6 @@ export default async function HomePage() {
 
   return (
     <div className="page" style={{ display: 'block' }}>
-      {/* Favorites Section - Client Component */}
-      <FavoritesSection />
-      
-      {/* Recent Section - Client Component */}
-      <RecentSection />
-      
       {/* Categories Section */}
       {categories.length > 0 && (
         <div className="mb-8">
@@ -62,4 +53,4 @@ export default async function HomePage() {
       )}
     </div>
   );
-}
+      }
