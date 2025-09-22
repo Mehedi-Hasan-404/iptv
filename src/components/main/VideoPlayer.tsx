@@ -253,7 +253,7 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
     const onError = () => {
       setIsLoading(false);
       const videoError = videoElement.error;
-      if (videoError?.code === videoError.MEDIA_ERR_NETWORK) {
+      if (videoError && videoError.code === MediaError.MEDIA_ERR_NETWORK) {
         setError('Network error. The stream might require authentication or be unavailable.');
       } else {
         setError('Video playback error. The stream might be unavailable.');
