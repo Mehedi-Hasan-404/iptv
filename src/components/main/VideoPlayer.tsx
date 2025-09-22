@@ -135,7 +135,9 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
               console.error('Fatal network error encountered');
               if (retryCount < 3) {
                 setTimeout(() => {
-                                    console.log('Attempting to recover from network error...');
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log('Attempting to recover from network error...');
+                  }
                   hls.startLoad();
                   setRetryCount(prev => prev + 1);
                 }, 2000);
