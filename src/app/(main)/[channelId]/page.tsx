@@ -1,10 +1,25 @@
 import { doc, getDoc, collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { notFound } from 'next/navigation';
-import VideoPlayer from '@/components/main/VideoPlayer';
+import dynamic from 'next/dynamic';
 import ChannelGrid from '@/components/main/ChannelGrid';
 import { PublicChannel, AdminChannel } from '@/types';
 import RecentsTracker from '@/components/main/RecentsTracker';
+
+// Dynamically import VideoPlayer with no SSR
+const VideoPlayer = dynamic(() => import('@/components/main/VideoPlayer'), {
+  ssr: false,
+  loading: () => (
+    <div className="video-player">
+      <div className="video-wrapper bg-black flex items-center justify-center">
+        <div className="player-loading-indicator show">
+          <div className="loading-spinner"></div>
+          <div className="loading-text">Loading player...</div>
+        </div>
+      </div>
+    </div>
+  )
+});
 
 interface ChannelPageProps {
   params: { channelId: string };
