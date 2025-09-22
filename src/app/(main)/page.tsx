@@ -1,51 +1,62 @@
-// /src/app/(main)/page.tsx
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+// /src/app/(main)/[channelId]/page.tsx
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
-import { Category } from '@/types';
-import CategoryCard from '@/components/main/CategoryCard';
-import FavoritesSection from '@/components/main/FavoritesSection';
-import RecentSection from '@/components/main/RecentSection';
+import { notFound } from 'next/navigation';
+import RecentsTracker from '@/components/main/RecentsTracker';
 
-export const dynamic = 'force-dynamic';
-
-async function getCategories(): Promise<Category[]> {
-  const categoriesCol = collection(db, 'categories');
-  const q = query(categoriesCol, orderBy('name', 'asc'));
-  const categorySnapshot = await getDocs(q);
-
-  if (categorySnapshot.empty) return [];
-
-  return categorySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Category[];
+interface ChannelPageProps {
+  params: {
+    channelId: string;
+  };
 }
 
-export default async function HomePage() {
-  const categories = await getCategories();
+async function getChannelData(channelId: string) {
+  const docRef = doc(db, 'channels', channelId);
+  const snap = await getDoc(docRef);
+
+  if (!snap.exists()) return null;
+
+  return {
+    id: snap.id,
+    ...snap.data(),
+  };
+}
+
+export default async function ChannelPage({ params }: ChannelPageProps) {
+  const channelData = await getChannelData(params.channelId);
+
+  if (!channelData) {
+    notFound();
+  }
 
   return (
-    <div id="homepage" className="page" style={{ display: 'block' }}>
-      {/* Favorites Section */}
-      <FavoritesSection />
-      
-      {/* Recent Channels Section */}
-      <RecentSection />
-      
-      {/* Categories */}
-      <h2>📺 Categories</h2>
-      {categories.length > 0 ? (
-        <div id="categoryGrid" className="grid">
-          {categories.map(category => (
-            <CategoryCard key={category.id} category={category} />
-          ))}
-        </div>
-      ) : (
-        <div className="empty-state">
-          <h3>No Categories Found</h3>
-          <p>The administrator has not added any categories yet.</p>
-        </div>
+    <div id="channel-page" className="page" style={{ display: 'block' }}>
+      {/* ✅ Recents Tracker */}
+      <RecentsTracker
+        channel={{
+          id: channelData.id,
+          name: channelData.name,
+          logoUrl: channelData.logoUrl,
+          categoryId: channelData.categoryId,
+          categoryName: channelData.categoryName,
+        }}
+      />
+
+      {/* Channel Info */}
+      <h1>{channelData.name}</h1>
+      {channelData.logoUrl && (
+        <img
+          src={channelData.logoUrl}
+          alt={channelData.name}
+          width={120}
+          height={120}
+        />
       )}
+
+      {/* Example: player section */}
+      <div className="player">
+        <p>Channel player or stream goes here...</p>
+      </div>
     </div>
   );
 }
