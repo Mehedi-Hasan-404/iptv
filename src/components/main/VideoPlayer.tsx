@@ -1,7 +1,8 @@
+// /src/components/main/VideoPlayer.tsx
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import Hls from 'hls.js';
-import { PauseIcon, PlayIcon, FullscreenEnterIcon, FullscreenExitIcon, VolumeMaxIcon, VolumeMuteIcon, RotateIcon } from './Icons'; // Added RotateIcon
+import { PauseIcon, PlayIcon, FullscreenEnterIcon, FullscreenExitIcon, VolumeMaxIcon, VolumeMuteIcon, RotateIcon } from './Icons';
 
 interface VideoPlayerProps {
   streamUrl: string;
@@ -12,21 +13,22 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
   const [isClient, setIsClient] = useState(false);
   const playerWrapperRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
   
-  // State for our custom controls
-  const [playing, setPlaying] = useState(false); // Start as paused, or let HLS auto-play if user interaction allows
-  const [muted, setMuted] = useState(true); // Muted by default for autoplay compliance
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // New loading state
-  const [showControls, setShowControls] = useState(false); // Controls visibility
+  const [isLoading, setIsLoading] = useState(true);
+  const [showControls, setShowControls] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => setIsClient(true), []);
 
-  // Effect to hide controls after inactivity
+  // Controls visibility logic (same as before)
   useEffect(() => {
-    if (!playing || error) { // Always show controls if paused or error
+    if (!playing || error) {
       setShowControls(true);
       return;
     }
@@ -42,10 +44,9 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
       if (controlsTimeoutRef.current) {
         clearTimeout(controlsTimeoutRef.current);
       }
-      controlsTimeoutRef.current = setTimeout(hideControls, 3000); // Hide after 3 seconds
+      controlsTimeoutRef.current = setTimeout(hideControls, 3000);
     };
 
-    // Initial timeout
     controlsTimeoutRef.current = setTimeout(hideControls, 3000);
 
     const playerElement = playerWrapperRef.current;
@@ -67,116 +68,175 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
     };
   }, [playing, error]);
 
-
-  useEffect(() => {
+  const initializePlayer = () => {
     if (!videoRef.current || !isClient) return;
 
     const videoElement = videoRef.current;
-    let hls: Hls | null = null;
     const proxiedUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}`;
 
-    setError(null); // Clear previous errors
-    setIsLoading(true); // Start loading
+    setError(null);
+    setIsLoading(true);
 
-    // Reset video state
+    // Clean up previous instance
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
     videoElement.src = '';
     videoElement.load();
     setPlaying(false);
-    // setMuted(true); // Keep muted for potential autoplay
 
     if (Hls.isSupported()) {
-      hls = new Hls({
-        // Add HLS.js configuration here if needed, e.g., lowLatencyMode: true
+      const hls = new Hls({
+        debug: false,
+        enableWorker: true,
+        lowLatencyMode: false,
+        backBufferLength: 90,
+        maxBufferLength: 30,
+        maxMaxBufferLength: 600,
+        maxBufferSize: 60 * 1000 * 1000, // 60 MB
+        maxBufferHole: 0.5,
+        highBufferWatchdogPeriod: 2,
+        nudgeOffset: 0.1,
+        nudgeMaxRetry: 3,
+        maxFragLookUpTolerance: 0.25,
+        liveSyncDurationCount: 3,
+        liveMaxLatencyDurationCount: Infinity,
+        liveDurationInfinity: true,
+        preferManagedMediaSource: true,
       });
+
+      hlsRef.current = hls;
       hls.loadSource(proxiedUrl);
       hls.attachMedia(videoElement);
+
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        setIsLoading(false); // Manifest loaded, stop loading indicator
+        setIsLoading(false);
         videoElement.play().catch(e => {
-          console.warn('Video play prevented by browser:', e);
-          // Only set playing to false if play() truly fails (user gesture required)
+          console.warn('Autoplay prevented:', e);
           if (e.name === "NotAllowedError") {
             setPlaying(false);
-            // Optionally, show a "click to play" overlay
           }
         });
       });
+
       hls.on(Hls.Events.ERROR, (event, data) => {
+        console.error('HLS Error:', data);
+        
         if (data.fatal) {
-          console.error('HLS.js Fatal Error:', data);
-          setIsLoading(false);
-          setPlaying(false);
-          setError(`Stream error: ${data.details}. It might be offline or restricted.`);
-          if (hls) {
-            hls.destroy();
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.error('Fatal network error encountered');
+              if (retryCount < 3) {
+                setTimeout(() => {
+                  console.log('Attempting to recover from network error...');
+                  hls.startLoad();
+                  setRetryCount(prev => prev + 1);
+                }, 2000);
+              } else {
+                setError('Network error: Unable to load the stream. Please check your connection.');
+                setIsLoading(false);
+              }
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              console.error('Fatal media error encountered');
+              hls.recoverMediaError();
+              break;
+            default:
+              setError(`Stream error: ${data.details || 'Unknown error'}. The stream might be offline or restricted.`);
+              setIsLoading(false);
+              hls.destroy();
+              break;
           }
-        } else if (data.response?.code === 404) {
-             console.warn('HLS.js Non-Fatal Error (404):', data);
-             // Could retry here or try to switch quality
         }
       });
-      hls.on(Hls.Events.BUFFER_APPENDED, () => {
-        // This event signifies data has been appended to the media source buffer.
-        // It's a good time to ensure loading state is false after initial buffer.
+
+      hls.on(Hls.Events.LEVEL_LOADED, () => {
         setIsLoading(false);
+        setRetryCount(0); // Reset retry count on successful load
       });
-      hls.on(Hls.Events.LEVEL_LOADED, (event, data) => {
-        // If a level (quality) is loaded, we are actively receiving data
-        setIsLoading(false);
-      });
+
     } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
-      // For native HLS support (like Safari)
+      // Native HLS support
       videoElement.src = proxiedUrl;
-      videoElement.addEventListener('loadedmetadata', () => {
-        setIsLoading(false); // Metadata loaded, stop loading indicator
+      
+      const handleLoadedMetadata = () => {
+        setIsLoading(false);
         videoElement.play().catch(e => {
-          console.warn('Native video play prevented by browser:', e);
+          console.warn('Native play prevented:', e);
           if (e.name === "NotAllowedError") {
             setPlaying(false);
           }
         });
-      });
-      videoElement.addEventListener('error', (e) => {
+      };
+
+      const handleError = (e: Event) => {
         console.error('Native video error:', e);
         setIsLoading(false);
         setPlaying(false);
-        setError('This stream could not be played natively. It might be offline or restricted.');
-      });
+        setError('Unable to play this stream. It might be offline or restricted.');
+      };
+
+      videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
+      videoElement.addEventListener('error', handleError);
+
+      return () => {
+        videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        videoElement.removeEventListener('error', handleError);
+      };
     } else {
       setIsLoading(false);
       setError('Your browser does not support HLS streaming.');
     }
 
-    // Event listeners for video element to update state
+    // Video element event listeners
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
-    const onWaiting = () => setIsLoading(true); // Video is buffering
-    const onPlaying = () => setIsLoading(false); // Video resumed playing after buffering
-    const onCanPlay = () => setIsLoading(false); // Video is ready to play
+    const onWaiting = () => setIsLoading(true);
+    const onPlaying = () => setIsLoading(false);
+    const onCanPlay = () => setIsLoading(false);
+    const onError = () => {
+      setIsLoading(false);
+      setError('Video playback error. The stream might be unavailable.');
+    };
 
     videoElement.addEventListener('play', onPlay);
     videoElement.addEventListener('pause', onPause);
     videoElement.addEventListener('waiting', onWaiting);
     videoElement.addEventListener('playing', onPlaying);
     videoElement.addEventListener('canplay', onCanPlay);
+    videoElement.addEventListener('error', onError);
 
-    // Cleanup function to destroy the HLS instance when the component unmounts
     return () => {
-      if (hls) {
-        hls.destroy();
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
       }
       videoElement.removeEventListener('play', onPlay);
       videoElement.removeEventListener('pause', onPause);
       videoElement.removeEventListener('waiting', onWaiting);
       videoElement.removeEventListener('playing', onPlaying);
       videoElement.removeEventListener('canplay', onCanPlay);
+      videoElement.removeEventListener('error', onError);
+    };
+  };
+
+  useEffect(() => {
+    const cleanup = initializePlayer();
+    return () => {
+      cleanup?.();
       if (controlsTimeoutRef.current) {
         clearTimeout(controlsTimeoutRef.current);
       }
     };
   }, [streamUrl, isClient]);
-  
-  // Functions to control the <video> element
+
+  const handleRetry = () => {
+        setRetryCount(0);
+    initializePlayer();
+  };
+
   const handlePlayPause = () => {
     if (videoRef.current) {
       if (videoRef.current.paused) {
@@ -217,11 +277,19 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
     >
       <div className="video-wrapper">
         {error ? (
-          <div className="w-full h-full flex items-center justify-center bg-black text-white p-4 text-center">
-            <p>{error}</p>
-            <button onClick={() => window.location.reload()} className="play-btn mt-4 flex items-center gap-2">
-              <RotateIcon size={18} /> Reload Page
-            </button>
+          <div className="w-full h-full flex flex-col items-center justify-center bg-black text-white p-4 text-center">
+            <div className="max-w-md">
+              <h3 className="text-xl font-semibold mb-2">Stream Error</h3>
+              <p className="mb-4">{error}</p>
+              <div className="flex gap-2 justify-center">
+                <button onClick={handleRetry} className="play-btn flex items-center gap-2">
+                  <RotateIcon size={18} /> Retry
+                </button>
+                <button onClick={() => window.location.reload()} className="play-btn flex items-center gap-2">
+                  <RotateIcon size={18} /> Reload Page
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
           <video
