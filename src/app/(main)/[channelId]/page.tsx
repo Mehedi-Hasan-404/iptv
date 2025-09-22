@@ -26,24 +26,40 @@ interface ChannelPageProps {
 }
 
 async function getChannelData(id: string): Promise<AdminChannel | null> {
-  const docRef = doc(db, 'channels', id);
-  const docSnap = await getDoc(docRef);
-  if (!docSnap.exists()) return null;
-  return { id: docSnap.id, ...docSnap.data() } as AdminChannel;
+  try {
+    const docRef = doc(db, 'channels', id);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return null;
+    return { id: docSnap.id, ...docSnap.data() } as AdminChannel;
+  } catch (error) {
+    console.error('Error fetching channel:', error);
+    return null;
+  }
 }
 
 async function getRelatedChannels(categoryId: string, currentChannelId: string): Promise<PublicChannel[]> {
-  const channelsCol = collection(db, 'channels');
-  const q = query(
-    channelsCol, 
-    where('categoryId', '==', categoryId),
-    orderBy('name'),
-    limit(20)
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs
-    .map(doc => ({ id: doc.id, ...doc.data() }))
-    .filter(channel => channel.id !== currentChannelId) as PublicChannel[];
+  try {
+    const channelsCol = collection(db, 'channels');
+    const q = query(
+      channelsCol, 
+      where('categoryId', '==', categoryId),
+      orderBy('name'),
+      limit(20)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs
+      .map(doc => ({ 
+        id: doc.id, 
+        name: doc.data().name,
+        logoUrl: doc.data().logoUrl,
+        categoryId: doc.data().categoryId,
+        categoryName: doc.data().categoryName
+      }))
+      .filter(channel => channel.id !== currentChannelId) as PublicChannel[];
+  } catch (error) {
+    console.error('Error fetching related channels:', error);
+    return [];
+  }
 }
 
 export default async function ChannelPage({ params }: ChannelPageProps) {
@@ -59,6 +75,7 @@ export default async function ChannelPage({ params }: ChannelPageProps) {
           id: channelData.id,
           name: channelData.name,
           logoUrl: channelData.logoUrl,
+          categoryId: channelData.categoryId,
           categoryName: channelData.categoryName
         }}
       />
