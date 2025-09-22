@@ -9,6 +9,7 @@ interface RecentsTrackerProps {
     id: string;
     name: string;
     logoUrl: string;
+    categoryId: string;
     categoryName: string;
   };
 }
