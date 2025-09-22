@@ -7,6 +7,7 @@ interface FavoriteChannel {
   id: string;
   name: string;
   logoUrl: string;
+  categoryId: string;
   categoryName: string;
   addedAt: number;
 }
