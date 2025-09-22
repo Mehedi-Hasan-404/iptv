@@ -18,8 +18,11 @@ export default function RecentsTracker({ channel }: RecentsTrackerProps) {
   const { addRecent } = useFavorites();
 
   useEffect(() => {
-    addRecent(channel);
-  }, [channel.id]);
+    // Only add to recents if we have a valid channel
+    if (channel && channel.id) {
+      addRecent(channel);
+    }
+  }, [channel.id, channel.name, channel.logoUrl, channel.categoryId, channel.categoryName, addRecent]);
 
   return null;
 }
