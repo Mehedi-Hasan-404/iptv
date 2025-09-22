@@ -39,6 +39,15 @@ export default async function ChannelPage({ params }: ChannelPageProps) {
 
   return (
     <div className="page" style={{ display: 'block' }}>
+      <RecentsTracker 
+        channel={{
+          id: channelData.id,
+          name: channelData.name,
+          logoUrl: channelData.logoUrl,
+          categoryName: channelData.categoryName
+        }}
+      />
+      
       <div className="sticky-player-container !static md:!sticky">
         <VideoPlayer 
           streamUrl={channelData.streamUrl} 
