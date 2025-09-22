@@ -20,8 +20,9 @@ export async function GET(request: NextRequest) {
   }
 
   const requestHeadersToForward = new Headers();
+  
+  // Copy important headers from the original request
   const allowedRequestHeaders = ['user-agent', 'referer', 'range', 'accept', 'accept-encoding', 'accept-language'];
-
   allowedRequestHeaders.forEach(headerName => {
     const headerValue = request.headers.get(headerName);
     if (headerValue) {
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
     }
   });
 
-  // Set a proper User-Agent
+  // Set proper headers for streaming
   requestHeadersToForward.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
   
   // Set Origin and Referer based on the stream URL
@@ -41,9 +42,14 @@ export async function GET(request: NextRequest) {
     console.warn(`Could not parse stream URL: ${streamUrlString}`, e);
   }
 
-  // Add authentication cookie if provided
+  // IMPORTANT: Add the authentication cookie if provided
   if (authCookie) {
-    requestHeadersToForward.set('Cookie', authCookie);
+    // If the cookie doesn't include the name, assume it's the value only
+    if (!authCookie.includes('=')) {
+      requestHeadersToForward.set('Cookie', `Edge-Cache-Cookie=${authCookie}`);
+    } else {
+      requestHeadersToForward.set('Cookie', authCookie);
+    }
   }
 
   // Accept header for HLS content
@@ -53,7 +59,6 @@ export async function GET(request: NextRequest) {
     const response = await fetch(streamUrlString, {
       headers: requestHeadersToForward,
       redirect: 'follow',
-      // Add timeout
       signal: AbortSignal.timeout(30000), // 30 second timeout
     });
 
@@ -119,7 +124,7 @@ export async function GET(request: NextRequest) {
           const absoluteUrl = getAbsoluteUrl(trimmedLine, streamUrlString);
           let proxyUrl = `/api/proxy?url=${encodeURIComponent(absoluteUrl)}`;
           
-          // Pass along the auth cookie for segment requests
+          // IMPORTANT: Pass along the auth cookie for segment requests
           if (authCookie) {
             proxyUrl += `&cookie=${encodeURIComponent(authCookie)}`;
           }
@@ -150,6 +155,9 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('Proxy error:', error);
     console.error(`Failed URL: ${streamUrlString}`);
+    if (authCookie) {
+      console.error(`Auth Cookie was provided: ${authCookie.substring(0, 20)}...`);
+    }
     
     const errorMessage = error.name === 'AbortError' 
       ? 'Request timeout - the stream took too long to respond'
