@@ -1,9 +1,11 @@
+// /src/app/(main)/page.tsx
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { Category } from '@/types';
 import CategoryCard from '@/components/main/CategoryCard';
+import FavoritesSection from '@/components/main/FavoritesSection';
+import RecentSection from '@/components/main/RecentSection';
 
-// ADD THIS LINE to ensure the page always fetches fresh data
 export const dynamic = 'force-dynamic';
 
 async function getCategories(): Promise<Category[]> {
@@ -24,6 +26,13 @@ export default async function HomePage() {
 
   return (
     <div id="homepage" className="page" style={{ display: 'block' }}>
+      {/* Favorites Section */}
+      <FavoritesSection />
+      
+      {/* Recent Channels Section */}
+      <RecentSection />
+      
+      {/* Categories */}
       <h2>📺 Categories</h2>
       {categories.length > 0 ? (
         <div id="categoryGrid" className="grid">
