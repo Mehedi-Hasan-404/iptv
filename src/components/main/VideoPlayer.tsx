@@ -1,4 +1,3 @@
-// /src/components/main/VideoPlayer.tsx
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import Hls from 'hls.js';
@@ -7,9 +6,10 @@ import { PauseIcon, PlayIcon, FullscreenEnterIcon, FullscreenExitIcon, VolumeMax
 interface VideoPlayerProps {
   streamUrl: string;
   channelName: string;
+  authCookie?: string;
 }
 
-const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
+const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) => {
   const [isClient, setIsClient] = useState(false);
   const playerWrapperRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -26,7 +26,7 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
 
   useEffect(() => setIsClient(true), []);
 
-  // Controls visibility logic (same as before)
+  // Controls visibility logic
   useEffect(() => {
     if (!playing || error) {
       setShowControls(true);
@@ -72,7 +72,12 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
     if (!videoRef.current || !isClient) return;
 
     const videoElement = videoRef.current;
-    const proxiedUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}`;
+    
+    // Build the proxied URL with optional cookie
+    let proxiedUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}`;
+    if (authCookie) {
+      proxiedUrl += `&cookie=${encodeURIComponent(authCookie)}`;
+    }
 
     setError(null);
     setIsLoading(true);
@@ -130,7 +135,7 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
               console.error('Fatal network error encountered');
               if (retryCount < 3) {
                 setTimeout(() => {
-                  console.log('Attempting to recover from network error...');
+                                    console.log('Attempting to recover from network error...');
                   hls.startLoad();
                   setRetryCount(prev => prev + 1);
                 }, 2000);
@@ -230,10 +235,10 @@ const VideoPlayer = ({ streamUrl, channelName }: VideoPlayerProps) => {
         clearTimeout(controlsTimeoutRef.current);
       }
     };
-  }, [streamUrl, isClient]);
+  }, [streamUrl, authCookie, isClient]);
 
   const handleRetry = () => {
-        setRetryCount(0);
+    setRetryCount(0);
     initializePlayer();
   };
 
