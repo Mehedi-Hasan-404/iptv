@@ -546,3 +546,108 @@ button:hover{transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,0.3);}
 @media (max-width:480px){
   .grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;}
 }
+
+/* Heading Styles */
+h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+}
+
+h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Fix for build warnings */
+.page {
+  min-height: calc(100vh - 130px);
+}
+
+/* Error handling styles */
+.error-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  text-align: center;
+}
+
+/* Loading states */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Ensure proper spacing in production builds */
+.mb-8 {
+  margin-bottom: 2rem !important;
+}
+
+.mt-8 {
+  margin-top: 2rem !important;
+}
+
+/* Fix for Next.js Image component in cards */
+.card .thumbnail {
+  position: absolute !important;
+}
+
+/* Ensure grid responsiveness */
+@media (max-width: 640px) {
+  .grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Fix console log warnings in production */
+.no-console {
+  pointer-events: none;
+}
+
+/* Player title styling */
+.player-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* Additional utility classes */
+.text-2xl {
+  font-size: 1.5rem;
+  line-height: 2rem;
+}
+
+.font-bold {
+  font-weight: 700;
+}
+
+.mb-4 {
+  margin-bottom: 1rem;
+}
+
+/* Fix for sticky elements */
+.sticky {
+  position: sticky;
+}
+
+/* Ensure proper z-index stacking */
+.z-10 {
+  z-index: 10;
+}
+
+.z-20 {
+  z-index: 20;
+}
