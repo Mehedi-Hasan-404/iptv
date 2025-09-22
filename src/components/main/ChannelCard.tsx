@@ -23,6 +23,7 @@ const ChannelCard = ({ channel }: { channel: PublicChannel }) => {
         id: channel.id,
         name: channel.name,
         logoUrl: channel.logoUrl,
+        categoryId: channel.categoryId,
         categoryName: channel.categoryName
       });
     }
