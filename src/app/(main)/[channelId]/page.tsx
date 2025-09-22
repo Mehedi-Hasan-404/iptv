@@ -3,18 +3,18 @@ import { db } from '@/lib/firebase/client';
 import { notFound } from 'next/navigation';
 import VideoPlayer from '@/components/main/VideoPlayer';
 import ChannelGrid from '@/components/main/ChannelGrid';
-import { PublicChannel } from '@/types';
+import { PublicChannel, AdminChannel } from '@/types';
 import RecentsTracker from '@/components/main/RecentsTracker';
 
 interface ChannelPageProps {
   params: { channelId: string };
 }
 
-async function getChannelData(id: string) {
+async function getChannelData(id: string): Promise<AdminChannel | null> {
   const docRef = doc(db, 'channels', id);
   const docSnap = await getDoc(docRef);
   if (!docSnap.exists()) return null;
-  return { id: docSnap.id, ...docSnap.data() };
+  return { id: docSnap.id, ...docSnap.data() } as AdminChannel;
 }
 
 async function getRelatedChannels(categoryId: string, currentChannelId: string): Promise<PublicChannel[]> {
