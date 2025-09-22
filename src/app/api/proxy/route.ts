@@ -1,16 +1,14 @@
+// /src/app/api/proxy/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 
-// This function correctly resolves relative URLs from a playlist
 function getAbsoluteUrl(url: string, baseUrl: string): string {
   try {
-    // If the URL is already absolute, use it directly.
-    // Otherwise, resolve it against the base URL.
     return new URL(url, baseUrl).toString();
   } catch (e) {
     console.error(`Error resolving URL "${url}" with base "${baseUrl}":`, e);
-    return url; // Fallback to original URL if resolution fails
+    return url;
   }
 }
 
@@ -21,9 +19,8 @@ export async function GET(request: NextRequest) {
     return new NextResponse('Missing stream URL', { status: 400 });
   }
 
-  // Define headers to forward from the client to the upstream server
   const requestHeadersToForward = new Headers();
-  const allowedRequestHeaders = ['user-agent', 'referer', 'range', 'accept', 'accept-encoding', 'accept-language']; // Crucial for streams
+  const allowedRequestHeaders = ['user-agent', 'referer', 'range', 'accept', 'accept-encoding', 'accept-language'];
 
   allowedRequestHeaders.forEach(headerName => {
     const headerValue = request.headers.get(headerName);
@@ -32,83 +29,139 @@ export async function GET(request: NextRequest) {
     }
   });
 
-  // Override or set specific headers for the upstream request
-  // Ensure a robust User-Agent (mimicking a common browser)
-  if (!requestHeadersToForward.has('user-agent')) {
-    requestHeadersToForward.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'); // Updated User-Agent
-  }
-  // Set Referer to the origin of the *requested stream*, not your proxy's origin
+  // Set a proper User-Agent
+  requestHeadersToForward.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+  
+  // Set Origin and Referer based on the stream URL
   try {
-    const refererOrigin = new URL(streamUrlString).origin;
-    requestHeadersToForward.set('Referer', refererOrigin);
+    const streamUrl = new URL(streamUrlString);
+    requestHeadersToForward.set('Origin', streamUrl.origin);
+    requestHeadersToForward.set('Referer', streamUrl.origin + '/');
   } catch (e) {
-    console.warn(`Could not determine referer origin for ${streamUrlString}:`, e);
-    // Fallback or skip if URL is malformed
-  }
-  // Ensure Accept header is broad for media
-  if (!requestHeadersToForward.has('accept')) {
-    requestHeadersToForward.set('Accept', 'application/vnd.apple.mpegurl, application/x-mpegURL, application/dash+xml, video/mp2t, */*');
+    console.warn(`Could not parse stream URL: ${streamUrlString}`, e);
   }
 
+  // Accept header for HLS content
+  requestHeadersToForward.set('Accept', 'application/vnd.apple.mpegurl, application/x-mpegURL, video/mp2t, */*');
 
   try {
     const response = await fetch(streamUrlString, {
-      headers: requestHeadersToForward, // Use the carefully constructed headers
-      redirect: 'follow', // Follow redirects from the upstream server
+      headers: requestHeadersToForward,
+      redirect: 'follow',
+      // Add timeout
+      signal: AbortSignal.timeout(30000), // 30 second timeout
     });
 
     if (!response.ok) {
       console.error(`Upstream fetch failed for ${streamUrlString}: ${response.status} ${response.statusText}`);
-      console.error('Upstream Request Headers:', Object.fromEntries(requestHeadersToForward.entries()));
-      console.error('Upstream Response Headers:', Object.fromEntries(response.headers.entries()));
-      return new NextResponse(`Upstream fetch failed: ${response.status} ${response.statusText}`, { status: response.status });
+      return new NextResponse(`Upstream fetch failed: ${response.status} ${response.statusText}`, { 
+        status: response.status,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+        }
+      });
     }
 
     const contentType = response.headers.get('content-type') || '';
-    const newHeaders = new Headers(response.headers); // Start with all upstream headers
+    const newHeaders = new Headers();
     
-    // Crucial for CORS: Allow client to read the response
+    // Copy important headers from upstream
+    const headersToForward = ['content-type', 'content-length', 'accept-ranges', 'content-range'];
+    headersToForward.forEach(header => {
+      const value = response.headers.get(header);
+      if (value) {
+        newHeaders.set(header, value);
+      }
+    });
+    
+    // CORS headers
     newHeaders.set('Access-Control-Allow-Origin', '*');
     newHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-    // Expose ALL relevant headers to Hls.js for proper playback, including Range, Content-Length, etc.
-    newHeaders.set('Access-Control-Expose-Headers', '*'); 
-
-    // Prevent caching of proxied content if dynamic or sensitive
-    newHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    newHeaders.set('Access-Control-Expose-Headers', '*');
+    
+    // Prevent caching for live streams
+    newHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     newHeaders.set('Pragma', 'no-cache');
     newHeaders.set('Expires', '0');
 
+    // Check if this is an M3U8 playlist
+    const isM3U8 = contentType.includes('mpegurl') || 
+                   contentType.includes('m3u8') ||
+                   streamUrlString.endsWith('.m3u8') || 
+                   streamUrlString.includes('.m3u');
 
-    // Check if the content is an M3U8 playlist
-    if (contentType.includes('mpegurl') || streamUrlString.endsWith('.m3u8') || streamUrlString.includes('playlist.m3u')) { // Added common playlist suffixes
+    if (isM3U8) {
       let playlistText = await response.text();
       
-      // Rewrite all URLs inside the playlist to go through our proxy
-      const rewrittenPlaylist = playlistText.split('\n').map(line => {
+      // Process the playlist line by line
+      const lines = playlistText.split('\n');
+      const rewrittenLines = lines.map(line => {
         const trimmedLine = line.trim();
-        if (trimmedLine && !trimmedLine.startsWith('#') && (trimmedLine.startsWith('http') || trimmedLine.includes('.ts') || trimmedLine.includes('.m3u8') || trimmedLine.includes('.mp4'))) { // Added .mp4
+        
+        // Skip empty lines and comments
+        if (!trimmedLine || trimmedLine.startsWith('#')) {
+          return line;
+        }
+        
+        // Check if this line is a URL (for segments or nested playlists)
+        if (trimmedLine.includes('.ts') || 
+            trimmedLine.includes('.m3u8') || 
+            trimmedLine.includes('.mp4') ||
+            trimmedLine.startsWith('http') ||
+            trimmedLine.startsWith('/')) {
+          
           const absoluteUrl = getAbsoluteUrl(trimmedLine, streamUrlString);
           return `/api/proxy?url=${encodeURIComponent(absoluteUrl)}`;
         }
+        
         return line;
-      }).join('\n');
+      });
       
-      // Set the correct content type for M3U8 playlists if not already present or if it was generic
-      if (!newHeaders.has('Content-Type') || !newHeaders.get('Content-Type')?.includes('mpegurl')) {
-        newHeaders.set('Content-Type', 'application/vnd.apple.mpegurl');
-      }
+      const rewrittenPlaylist = rewrittenLines.join('\n');
       
-      return new NextResponse(rewrittenPlaylist, { status: 200, headers: newHeaders });
+      // Ensure correct content type
+      newHeaders.set('Content-Type', 'application/vnd.apple.mpegurl');
+      
+      return new NextResponse(rewrittenPlaylist, { 
+        status: 200, 
+        headers: newHeaders 
+      });
     }
 
-    // For all other content (e.g., video chunks, audio segments)
-    // The original headers from the upstream response (including Content-Type, Content-Length, etc.) are passed through
-    return new NextResponse(response.body, { status: response.status, headers: newHeaders });
+    // For video segments and other content, stream the response
+    return new NextResponse(response.body, { 
+      status: response.status, 
+      headers: newHeaders 
+    });
 
   } catch (error: any) {
-    console.error('Proxy internal error:', error);
-    // Log the URL that caused the error
-    console.error(`Error occurred while proxying: ${streamUrlString}`);
-    return new NextResponse(`Internal Server Error: ${error.message || 'Unknown error'}`, { status: 500 });
+    console.error('Proxy error:', error);
+    console.error(`Failed URL: ${streamUrlString}`);
+    
+    const errorMessage = error.name === 'AbortError' 
+      ? 'Request timeout - the stream took too long to respond'
+      : `Proxy error: ${error.message || 'Unknown error'}`;
+    
+    return new NextResponse(errorMessage, { 
+      status: 500,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+      }
+    });
   }
+}
+
+// Handle OPTIONS requests for CORS
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+      'Access-Control-Allow-Headers': '*',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
 }
