@@ -1,4 +1,3 @@
-// /src/app/api/proxy/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'edge';
@@ -14,6 +13,7 @@ function getAbsoluteUrl(url: string, baseUrl: string): string {
 
 export async function GET(request: NextRequest) {
   const streamUrlString = request.nextUrl.searchParams.get('url');
+  const authCookie = request.nextUrl.searchParams.get('cookie');
 
   if (!streamUrlString) {
     return new NextResponse('Missing stream URL', { status: 400 });
@@ -39,6 +39,11 @@ export async function GET(request: NextRequest) {
     requestHeadersToForward.set('Referer', streamUrl.origin + '/');
   } catch (e) {
     console.warn(`Could not parse stream URL: ${streamUrlString}`, e);
+  }
+
+  // Add authentication cookie if provided
+  if (authCookie) {
+    requestHeadersToForward.set('Cookie', authCookie);
   }
 
   // Accept header for HLS content
@@ -112,7 +117,14 @@ export async function GET(request: NextRequest) {
             trimmedLine.startsWith('/')) {
           
           const absoluteUrl = getAbsoluteUrl(trimmedLine, streamUrlString);
-          return `/api/proxy?url=${encodeURIComponent(absoluteUrl)}`;
+          let proxyUrl = `/api/proxy?url=${encodeURIComponent(absoluteUrl)}`;
+          
+          // Pass along the auth cookie for segment requests
+          if (authCookie) {
+            proxyUrl += `&cookie=${encodeURIComponent(authCookie)}`;
+          }
+          
+          return proxyUrl;
         }
         
         return line;
