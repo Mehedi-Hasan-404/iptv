@@ -2,86 +2,138 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
-import { Category } from '@/types';
+import { AdminChannel, Category } from '@/types';
 
-// Helper function to create a URL-friendly slug
-const createSlug = (name: string) => {
-  return name
-    .toLowerCase()
-    .replace(/&/g, 'and') // replace & with 'and'
-    .replace(/[^a-z0-9]+/g, '-') // replace non-alphanumeric characters with a hyphen
-    .replace(/^-+|-+$/g, ''); // remove leading or trailing hyphens
-};
-
-export default function CategoryManager() {
+export default function ChannelManager() {
+  const [channels, setChannels] = useState<AdminChannel[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [current, setCurrent] = useState<{ id?: string; name: string; iconUrl: string }>({ name: '', iconUrl: '' });
+  const [current, setCurrent] = useState<Partial<AdminChannel>>({ 
+    name: '', 
+    logoUrl: '', 
+    streamUrl: '', 
+    categoryId: '',
+    authCookie: ''
+  });
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
-    const q = query(collection(db, "categories"), orderBy("name"));
-    const unsub = onSnapshot(q, (snapshot) => {
-      setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category)));
-    });
-    return () => unsub();
+    const catQuery = query(collection(db, "categories"), orderBy("name"));
+    const unsubCats = onSnapshot(catQuery, (snap) => setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() } as Category))));
+
+    const chanQuery = query(collection(db, "channels"), orderBy("name"));
+    const unsubChans = onSnapshot(chanQuery, (snap) => setChannels(snap.docs.map(d => ({ id: d.id, ...d.data() } as AdminChannel))));
+    
+    return () => { unsubCats(); unsubChans(); };
   }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const slug = createSlug(current.name); // Generate the slug from the name
-    if (!slug) {
-        alert("Category name cannot be empty or invalid.");
-        return;
-    }
+    const category = categories.find(c => c.id === current.categoryId);
+    if (!category) return alert("Please select a category.");
 
-    const dataToSave = {
+    const data = {
         name: current.name,
-        iconUrl: current.iconUrl,
-        slug: slug // Include the slug when saving data
+        logoUrl: current.logoUrl,
+        streamUrl: current.streamUrl,
+        categoryId: current.categoryId,
+        categoryName: category.name,
+        authCookie: current.authCookie || undefined
     };
 
     if (isEditing && current.id) {
-      await updateDoc(doc(db, 'categories', current.id), dataToSave);
+      await updateDoc(doc(db, 'channels', current.id), data);
     } else {
-      await addDoc(collection(db, 'categories'), dataToSave);
+      await addDoc(collection(db, 'channels'), data);
     }
     resetForm();
   };
 
-  const handleEdit = (cat: Category) => {
+  const handleEdit = (chan: AdminChannel) => {
     setIsEditing(true);
-    setCurrent(cat);
+    setCurrent(chan);
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Delete this category?')) await deleteDoc(doc(db, 'categories', id));
+    if (confirm('Delete this channel?')) await deleteDoc(doc(db, 'channels', id));
   };
   
   const resetForm = () => {
     setIsEditing(false);
-    setCurrent({ name: '', iconUrl: '' });
+    setCurrent({ name: '', logoUrl: '', streamUrl: '', categoryId: '', authCookie: '' });
   };
 
   return (
     <div className="grid md:grid-cols-3 gap-8">
       <form onSubmit={handleSubmit} className="md:col-span-1 bg-gray-800 p-6 rounded-lg space-y-4">
-        <h3 className="text-xl font-semibold">{isEditing ? 'Edit' : 'Add'} Category</h3>
-        <input value={current.name} onChange={e => setCurrent({...current, name: e.target.value})} placeholder="Category Name" className="form-input" required/>
-        <input type="url" value={current.iconUrl} onChange={e => setCurrent({...current, iconUrl: e.target.value})} placeholder="Icon URL" className="form-input" required/>
+        <h3 className="text-xl font-semibold">{isEditing ? 'Edit' : 'Add'} Channel</h3>
+        <input 
+          value={current.name} 
+          onChange={e => setCurrent({...current, name: e.target.value})} 
+          placeholder="Channel Name" 
+          className="form-input" 
+          required 
+        />
+        <input 
+          type="url" 
+          value={current.logoUrl} 
+          onChange={e => setCurrent({...current, logoUrl: e.target.value})} 
+          placeholder="Logo URL" 
+          className="form-input" 
+          required 
+        />
+        <input 
+          type="url" 
+          value={current.streamUrl} 
+          onChange={e => setCurrent({...current, streamUrl: e.target.value})} 
+          placeholder="Stream URL (m3u8)" 
+          className="form-input" 
+          required 
+        />
+        
+        {/* Auth Cookie Field - Simplified without help */}
+        <div className="space-y-2">
+          <label className="text-sm text-gray-400">Authentication Cookie (Optional)</label>
+          <textarea 
+            value={current.authCookie || ''} 
+            onChange={e => setCurrent({...current, authCookie: e.target.value})} 
+            placeholder="Edge-Cache-Cookie=URLPrefix=..." 
+            className="form-input min-h-[80px] font-mono text-xs"
+            rows={3}
+          />
+        </div>
+        
+        <select 
+          value={current.categoryId} 
+          onChange={e => setCurrent({...current, categoryId: e.target.value})} 
+          className="form-input" 
+          required
+        >
+          <option value="">Select Category</option>
+          {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+        </select>
+        
         <div className="flex gap-2">
-            <button type="submit" className="play-btn flex-grow">{isEditing ? 'Update' : 'Save'}</button>
-            {isEditing && <button type="button" onClick={resetForm} className="bg-gray-500 text-white px-4 rounded">Cancel</button>}
+          <button type="submit" className="play-btn flex-grow">{isEditing ? 'Update' : 'Save'}</button>
+          {isEditing && <button type="button" onClick={resetForm} className="bg-gray-500 text-white px-4 rounded">Cancel</button>}
         </div>
       </form>
+      
       <div className="md:col-span-2 bg-gray-800 p-6 rounded-lg">
-        <h3 className="text-xl font-semibold mb-4">Existing Categories</h3>
-        <div className="space-y-2">
-            {categories.map(cat => (
-              <div key={cat.id} className="flex justify-between items-center bg-gray-700 p-3 rounded">
-                <div className='flex items-center gap-3'><img src={cat.iconUrl} alt={cat.name} className="w-8 h-8 rounded-full" />{cat.name}</div>
+        <h3 className="text-xl font-semibold mb-4">Existing Channels</h3>
+        <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {channels.map(chan => (
+              <div key={chan.id} className="flex justify-between items-center bg-gray-700 p-3 rounded">
+                <div className='flex items-center gap-3'>
+                    <img src={chan.logoUrl} alt={chan.name} className="w-10 h-10 object-contain" />
+                    <div>
+                        <p>{chan.name}</p>
+                        <p className='text-xs text-gray-400'>{chan.categoryName}</p>
+                        {chan.authCookie && <p className='text-xs text-green-400'>🔐 Auth Required</p>}
+                    </div>
+                </div>
                 <div className="flex gap-3">
-                  <button onClick={() => handleEdit(cat)} className="text-sm text-blue-400">Edit</button>
-                  <button onClick={() => handleDelete(cat.id)} className="text-sm text-red-500">Delete</button>
+                  <button onClick={() => handleEdit(chan)} className="text-sm text-blue-400">Edit</button>
+                  <button onClick={() => handleDelete(chan.id)} className="text-sm text-red-500">Delete</button>
                 </div>
               </div>
             ))}
