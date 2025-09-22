@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import VideoPlayer from '@/components/main/VideoPlayer';
 import ChannelGrid from '@/components/main/ChannelGrid';
 import { PublicChannel } from '@/types';
+import RecentsTracker from '@/components/main/RecentsTracker';
 
 interface ChannelPageProps {
   params: { channelId: string };
