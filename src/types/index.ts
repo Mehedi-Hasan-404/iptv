@@ -8,7 +8,7 @@ export interface Category {
 
 // Type for public channel data (safe to send to client)
 export interface PublicChannel {
-  id:string;
+  id: string;
   name: string;
   logoUrl: string;
   categoryId: string;
@@ -18,4 +18,5 @@ export interface PublicChannel {
 // Type for full channel data (only for admin panel)
 export interface AdminChannel extends PublicChannel {
   streamUrl: string; // The sensitive M3U link
+  authCookie?: string; // Optional authentication cookie
 }
