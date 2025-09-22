@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { HomeIcon, SettingsIcon } from './Icons';
+import { HomeIcon, SettingsIcon, Star } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -10,7 +10,12 @@ interface SidebarProps {
 const Sidebar = ({ isOpen, onClose, onSettingsClick }: SidebarProps) => (
     <div id="sidebar" className="sidebar" style={{ width: isOpen ? '250px' : '0' }}>
       <span className="closebtn" onClick={onClose}>×</span>
-      <Link href="/" onClick={onClose}><HomeIcon /><span>Home</span></Link>
+      <Link href="/" onClick={onClose}>
+        <HomeIcon /><span>Home</span>
+      </Link>
+      <Link href="/favorites" onClick={onClose}>
+        <Star /><span>Favorites</span>
+      </Link>
       <a href="#" onClick={(e) => { e.preventDefault(); onSettingsClick(); onClose(); }}>
         <SettingsIcon /><span>Settings</span>
       </a>
