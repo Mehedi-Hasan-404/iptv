@@ -1,4 +1,3 @@
-// /src/components/main/RecentsTracker.tsx
 'use client';
 
 import { useEffect } from 'react';
@@ -22,7 +21,7 @@ export default function RecentsTracker({ channel }: RecentsTrackerProps) {
     if (channel && channel.id) {
       addRecent(channel);
     }
-  }, [channel.id, channel.name, channel.logoUrl, channel.categoryId, channel.categoryName, addRecent]);
+  }, [channel, addRecent]);
 
   return null;
 }
