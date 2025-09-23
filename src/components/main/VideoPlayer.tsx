@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Hls from 'hls.js';
-import { PauseIcon, PlayIcon, FullscreenEnterIcon, FullscreenExitIcon, VolumeMaxIcon, VolumeMuteIcon, RotateCw } from './Icons';
+import { PauseIcon, PlayIcon, FullscreenEnterIcon, FullscreenExitIcon, VolumeMaxIcon, VolumeMuteIcon, RotateIcon } from './Icons';
 
 interface VideoPlayerProps {
   streamUrl: string;
@@ -18,7 +18,7 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showControls, setShowControls] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -355,10 +355,10 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
               )}
               <div className="flex gap-2 justify-center">
                 <button onClick={handleRetry} className="play-btn flex items-center gap-2">
-                  <RotateCw size={18} /> Retry
+                  <RotateIcon size={18} /> Retry
                 </button>
                 <button onClick={() => window.location.reload()} className="play-btn flex items-center gap-2">
-                  <RotateCw size={18} /> Reload Page
+                  <RotateIcon size={18} /> Reload Page
                 </button>
               </div>
             </div>
@@ -375,7 +375,7 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
           />
         )}
         
-        {isLoading && !error && (
+                {isLoading && !error && (
           <div className="player-loading-indicator show">
             <div className="loading-spinner"></div>
             <div className="loading-text">
