@@ -18,8 +18,6 @@ const nextConfig = {
   },
   // Suppress SWC warning in Vercel
   swcMinify: true,
-  // Disable telemetry
-  telemetry: false,
 };
 
 export default nextConfig;
