@@ -7,18 +7,30 @@ interface SidebarProps {
   onSettingsClick: () => void;
 }
 
-const Sidebar = ({ isOpen, onClose, onSettingsClick }: SidebarProps) => (
+const Sidebar = ({ isOpen, onClose, onSettingsClick }: SidebarProps) => {
+  const handleSettingsClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    onSettingsClick();
+    onClose();
+  };
+
+  return (
     <div id="sidebar" className="sidebar" style={{ width: isOpen ? '250px' : '0' }}>
       <span className="closebtn" onClick={onClose}>×</span>
       <Link href="/" onClick={onClose}>
-        <HomeIcon /><span>Home</span>
+        <HomeIcon />
+        <span>Home</span>
       </Link>
       <Link href="/favorites" onClick={onClose}>
-        <Star /><span>Favorites</span>
+        <Star />
+        <span>Favorites</span>
       </Link>
-      <a href="#" onClick={(e) => { e.preventDefault(); onSettingsClick(); onClose(); }}>
-        <SettingsIcon /><span>Settings</span>
+      <a href="#" onClick={handleSettingsClick}>
+        <SettingsIcon />
+        <span>Settings</span>
       </a>
     </div>
-);
+  );
+};
+
 export default Sidebar;
