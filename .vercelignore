@@ -1,5 +1,4 @@
 .git
 .next
 node_modules
-.env.local
 README.md
