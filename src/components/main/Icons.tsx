@@ -1,4 +1,3 @@
-// src/components/main/Icons.tsx
 'use client';
 
 // This file serves as a central hub for all icons used in the main application.
@@ -42,3 +41,6 @@ export const FullscreenEnterIcon = Maximize;
 export const FullscreenExitIcon = Minimize;
 export const RotateIcon = RotateCw;
 export const PipIcon = PictureInPicture;
+
+// Export RotateCw as well for backward compatibility
+export { RotateCw };
