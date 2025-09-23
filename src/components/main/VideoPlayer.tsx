@@ -1,7 +1,7 @@
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Hls from 'hls.js';
-import { PauseIcon, PlayIcon, FullscreenEnterIcon, FullscreenExitIcon, VolumeMaxIcon, VolumeMuteIcon, RotateIcon } from './Icons';
+import { PauseIcon, PlayIcon, FullscreenEnterIcon, FullscreenExitIcon, VolumeMaxIcon, VolumeMuteIcon, RotateCw } from './Icons';
 
 interface VideoPlayerProps {
   streamUrl: string;
@@ -18,7 +18,7 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showControls, setShowControls] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -54,6 +54,7 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
       playerElement.addEventListener('mousemove', showAndResetTimeout);
       playerElement.addEventListener('mouseenter', showAndResetTimeout);
       playerElement.addEventListener('mouseleave', hideControls);
+      playerElement.addEventListener('touchstart', showAndResetTimeout);
     }
     
     return () => {
@@ -64,11 +65,12 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
         playerElement.removeEventListener('mousemove', showAndResetTimeout);
         playerElement.removeEventListener('mouseenter', showAndResetTimeout);
         playerElement.removeEventListener('mouseleave', hideControls);
+        playerElement.removeEventListener('touchstart', showAndResetTimeout);
       }
     };
   }, [playing, error]);
 
-  const initializePlayer = () => {
+  const initializePlayer = useCallback(() => {
     if (!videoRef.current || !isClient) return;
 
     const videoElement = videoRef.current;
@@ -115,10 +117,8 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
         liveMaxLatencyDurationCount: Infinity,
         liveDurationInfinity: true,
         preferManagedMediaSource: true,
-        // Add xhrSetup to pass cookies for segment requests
-        xhrSetup: function(xhr, url) {
-          xhr.withCredentials = false; // Set to true if you need CORS credentials
-          // The proxy already handles cookies, so we don't need to set them here
+        xhrSetup: function(xhr: XMLHttpRequest) {
+          xhr.withCredentials = false;
         }
       });
 
@@ -177,19 +177,17 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
               break;
           }
         } else {
-          // Non-fatal errors
           console.warn('Non-fatal HLS error:', data.details);
         }
       });
 
-      hls.on(Hls.Events.LEVEL_LOADED, (event, data) => {
-        console.log('Level loaded:', data.details);
+      hls.on(Hls.Events.LEVEL_LOADED, () => {
+        console.log('Level loaded');
         setIsLoading(false);
-        setRetryCount(0); // Reset retry count on successful load
+        setRetryCount(0);
       });
 
-      hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
-        // Fragment loaded successfully
+      hls.on(Hls.Events.FRAG_LOADED, () => {
         setRetryCount(0);
       });
 
@@ -208,8 +206,8 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
         });
       };
 
-      const handleError = (e: Event) => {
-        console.error('Native video error:', e);
+      const handleError = () => {
+        console.error('Native video error');
         const videoError = videoElement.error;
         let errorMessage = 'Unable to play this stream.';
         
@@ -279,7 +277,7 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
       videoElement.removeEventListener('canplay', onCanPlay);
       videoElement.removeEventListener('error', onError);
     };
-  };
+  }, [streamUrl, authCookie, isClient, retryCount]);
 
   useEffect(() => {
     const cleanup = initializePlayer();
@@ -289,7 +287,7 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
         clearTimeout(controlsTimeoutRef.current);
       }
     };
-  }, [streamUrl, authCookie, isClient]);
+  }, [initializePlayer]);
 
   const handleRetry = () => {
     setRetryCount(0);
@@ -299,7 +297,7 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
   const handlePlayPause = () => {
     if (videoRef.current) {
       if (videoRef.current.paused) {
-        videoRef.current.play();
+        videoRef.current.play().catch(console.error);
       } else {
         videoRef.current.pause();
       }
@@ -315,14 +313,24 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
 
   const toggleFullscreen = () => {
     if (!playerWrapperRef.current) return;
+    
     if (!document.fullscreenElement) {
-      playerWrapperRef.current.requestFullscreen();
+      playerWrapperRef.current.requestFullscreen().catch(console.error);
       setFullscreen(true);
     } else {
-      document.exitFullscreen();
+      document.exitFullscreen().catch(console.error);
       setFullscreen(false);
     }
   };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   if (!isClient) {
     return <div className="video-player"><div className="video-wrapper bg-black" /></div>;
@@ -347,10 +355,10 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
               )}
               <div className="flex gap-2 justify-center">
                 <button onClick={handleRetry} className="play-btn flex items-center gap-2">
-                  <RotateIcon size={18} /> Retry
+                  <RotateCw size={18} /> Retry
                 </button>
                 <button onClick={() => window.location.reload()} className="play-btn flex items-center gap-2">
-                  <RotateIcon size={18} /> Reload Page
+                  <RotateCw size={18} /> Reload Page
                 </button>
               </div>
             </div>
@@ -368,12 +376,12 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
         )}
         
         {isLoading && !error && (
-            <div className="player-loading-indicator show">
-                <div className="loading-spinner"></div>
-                <div className="loading-text">
-                  {retryCount > 0 ? `Retrying... (${retryCount}/3)` : 'Loading stream...'}
-                </div>
+          <div className="player-loading-indicator show">
+            <div className="loading-spinner"></div>
+            <div className="loading-text">
+              {retryCount > 0 ? `Retrying... (${retryCount}/3)` : 'Loading stream...'}
             </div>
+          </div>
         )}
 
         {!error && (
