@@ -3,11 +3,18 @@ import { db } from '@/lib/firebase/client';
 import { Category } from '@/types';
 import CategoryCard from '@/components/main/CategoryCard';
 
+export const dynamic = 'force-dynamic';
+
 async function getCategories(): Promise<Category[]> {
-  const categoriesCol = collection(db, 'categories');
-  const q = query(categoriesCol, orderBy('name'));
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
+  try {
+    const categoriesCol = collection(db, 'categories');
+    const q = query(categoriesCol, orderBy('name'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    return [];
+  }
 }
 
 export default async function HomePage() {
