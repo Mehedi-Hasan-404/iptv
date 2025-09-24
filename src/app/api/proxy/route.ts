@@ -116,8 +116,7 @@ export async function GET(request: NextRequest) {
       method: 'GET',
       headers: requestHeadersToForward,
       redirect: 'follow',
-      // @ts-ignore - cache option is valid in edge runtime
-      cache: 'no-store',
+      // Remove TypeScript ignore and use proper typing
       signal: AbortSignal.timeout(30000),
     });
 
