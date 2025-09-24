@@ -1,10 +1,5 @@
 'use client';
 
-// This file serves as a central hub for all icons used in the main application.
-// We are using the 'lucide-react' library for a consistent and modern icon set.
-// By re-exporting them here, we can easily swap out the icon library in the future
-// without having to change the import paths in every single component.
-
 import {
   Home,
   Settings,
@@ -20,17 +15,19 @@ import {
   RotateCw,
   PictureInPicture,
   LogOut,
+  Check,
 } from 'lucide-react';
 
 // Navigation and General UI Icons
 export const HomeIcon = Home;
 export const SettingsIcon = Settings;
 export const SearchIcon = Search;
-export const XIcon = X; // For the 'clear search' button
+export const XIcon = X;
 export const LogOutIcon = LogOut;
+export const CheckIcon = Check;
 
 // Logo Icon
-export const LogoIcon = Tv; // Using the 'Tv' icon as the main app logo
+export const LogoIcon = Tv;
 
 // Video Player Control Icons
 export const PlayIcon = Play;
