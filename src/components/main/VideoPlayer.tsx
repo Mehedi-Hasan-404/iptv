@@ -17,8 +17,8 @@ import {
 // Extend the existing Screen interface properly
 declare global {
   interface ScreenOrientation {
-    lock?: (orientation: string) => Promise<void>;
-    unlock?: () => void;
+    lock: (orientation: string) => Promise<void>;
+    unlock: () => void;
   }
 }
 
