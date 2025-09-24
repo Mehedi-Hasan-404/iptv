@@ -195,6 +195,273 @@ video{width:100%;height:100%;display:block;background:#000;object-fit:contain;}
   transform: translateX(-50%);
 }
 
+/* Add these styles to your existing globals.css file */
+
+/* Enhanced Progress Container with Seekbar */
+.progress-container {
+  width: 100%;
+  height: var(--progress-height);
+  background: rgba(255,255,255,0.2);
+  cursor: pointer;
+  margin-bottom: 15px;
+  position: relative;
+  transition: height 0.2s;
+  border-radius: 2px;
+}
+
+.progress-container:hover {
+  height: calc(var(--progress-height) + 2px);
+}
+
+.progress-buffered {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: var(--buffered-color);
+  z-index: 1;
+  border-radius: 2px;
+}
+
+.progress-bar {
+  height: 100%;
+  background: var(--progress-color);
+  position: relative;
+  z-index: 2;
+  transition: width 0.1s;
+  border-radius: 2px;
+}
+
+.progress-bar::after {
+  content: '';
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  background: var(--progress-color);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s;
+  box-shadow: 0 0 4px rgba(0,0,0,0.3);
+}
+
+.progress-container:hover .progress-bar::after {
+  opacity: 1;
+}
+
+/* Settings Menu Positioning */
+.controls-right {
+  position: relative;
+}
+
+.controls-right .relative {
+  position: relative;
+}
+
+/* Enhanced Quality Menu for nested menus */
+.quality-menu {
+  display: none;
+  position: absolute;
+  bottom: 60px;
+  right: 0;
+  background: rgba(20,20,20,0.95);
+  border-radius: 8px;
+  min-width: 150px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 20;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Submenu positioning */
+.quality-menu[style*="right: '120px'"] {
+  right: 160px !important;
+}
+
+.quality-option {
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: #FFFFFF;
+  gap: 8px;
+}
+
+.quality-option:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+.quality-option.active {
+  background: rgba(52,152,219,0.2);
+  color: var(--accent);
+}
+
+/* PiP indicator */
+.video-player.pip-active .custom-controls {
+  display: none;
+}
+
+/* Fullscreen enhancements */
+@media (orientation: landscape) {
+  .video-player:fullscreen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .video-player:fullscreen .video-wrapper {
+    width: 100%;
+    height: 100%;
+  }
+  
+  .video-player:fullscreen video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+/* Mobile landscape controls */
+@media (max-width: 768px) and (orientation: landscape) {
+  .video-player:fullscreen .custom-controls {
+    padding: 10px;
+  }
+  
+  .video-player:fullscreen .control-button {
+    padding: 8px;
+  }
+  
+  .video-player:fullscreen .control-button svg {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .video-player:fullscreen .progress-container {
+    height: 6px;
+  }
+  
+  .video-player:fullscreen .quality-menu {
+    bottom: 70px;
+    max-height: 200px;
+  }
+}
+
+/* Time display enhancement */
+.time-display {
+  color: var(--text-primary);
+  font-size: 13px;
+  margin: 0 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Server indicator in loading */
+.loading-text {
+  color: #fff;
+  font-size: 14px;
+  margin-top: 10px;
+}
+
+/* Ensure controls are visible in fullscreen */
+.video-player:fullscreen.show-controls .custom-controls,
+.video-player:fullscreen.show-controls .top-controls {
+  opacity: 1;
+}
+
+/* Fix for iOS fullscreen */
+.video-player:-webkit-full-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 9999;
+}
+
+/* Settings icon active state */
+.control-button.active {
+  color: var(--accent);
+}
+
+/* Smooth transitions for all controls */
+.custom-controls,
+.top-controls,
+.center-controls {
+  transition: opacity 0.3s ease;
+}
+
+/* Enhanced center play button */
+.center-play-btn {
+  width: 70px;
+  height: 70px;
+  background: rgba(0,0,0,0.7);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.3s;
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255,255,255,0.2);
+  pointer-events: auto;
+}
+
+.video-player.show-controls .center-play-btn {
+  opacity: 0.8;
+}
+
+.center-play-btn:hover {
+  transform: scale(1.1);
+  opacity: 1 !important;
+}
+
+.video-player.playing .center-play-btn {
+  opacity: 0 !important;
+}
+
+.video-player.paused .center-play-btn {
+  opacity: 1 !important;
+}
+
+/* Ensure proper z-index stacking */
+.top-controls {
+  z-index: 15;
+}
+
+.custom-controls {
+  z-index: 16;
+}
+
+.quality-menu {
+  z-index: 21;
+}
+
+/* Hide scrollbar in quality menu */
+.quality-menu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.quality-menu::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.05);
+}
+
+.quality-menu::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 2px;
+}
+
+.quality-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.3);
+  }
+
 /* Control Buttons */
 .controls-bottom{display:flex;align-items:center;justify-content:space-between;}
 .controls-left, .controls-right{display:flex;align-items:center;gap:10px;}
