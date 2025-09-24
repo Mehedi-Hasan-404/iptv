@@ -1,15 +1,46 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Hls from 'hls.js';
-import { PauseIcon, PlayIcon, FullscreenEnterIcon, FullscreenExitIcon, VolumeMaxIcon, VolumeMuteIcon, RotateIcon } from './Icons';
+import { 
+  PauseIcon, 
+  PlayIcon, 
+  FullscreenEnterIcon, 
+  FullscreenExitIcon, 
+  VolumeMaxIcon, 
+  VolumeMuteIcon, 
+  RotateIcon,
+  PipIcon,
+  SettingsIcon,
+  CheckIcon
+} from './Icons';
 
 interface VideoPlayerProps {
   streamUrl: string;
+  streamUrl2?: string;
+  streamUrl3?: string;
+  streamUrl4?: string;
+  streamUrl5?: string;
   channelName: string;
   authCookie?: string;
+  isM3UPlaylist?: boolean;
 }
 
-const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) => {
+interface QualityLevel {
+  height: number;
+  level: number;
+  bitrate: number;
+}
+
+const VideoPlayer = ({ 
+  streamUrl, 
+  streamUrl2, 
+  streamUrl3, 
+  streamUrl4, 
+  streamUrl5, 
+  channelName, 
+  authCookie,
+  isM3UPlaylist 
+}: VideoPlayerProps) => {
   const [isClient, setIsClient] = useState(false);
   const playerWrapperRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -18,23 +49,44 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
+  const [pip, setPip] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showControls, setShowControls] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [buffered, setBuffered] = useState(0);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showQuality, setShowQuality] = useState(false);
+  const [showServers, setShowServers] = useState(false);
+  const [qualityLevels, setQualityLevels] = useState<QualityLevel[]>([]);
+  const [currentQuality, setCurrentQuality] = useState(-1);
+  const [currentServer, setCurrentServer] = useState(1);
+  const [isLive, setIsLive] = useState(true);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
+
+  // Get all available servers
+  const servers = [
+    { url: streamUrl, label: 'Server 1' },
+    streamUrl2 && { url: streamUrl2, label: 'Server 2' },
+    streamUrl3 && { url: streamUrl3, label: 'Server 3' },
+    streamUrl4 && { url: streamUrl4, label: 'Server 4' },
+    streamUrl5 && { url: streamUrl5, label: 'Server 5' },
+  ].filter(Boolean) as { url: string; label: string }[];
 
   useEffect(() => setIsClient(true), []);
 
   // Controls visibility logic
   useEffect(() => {
-    if (!playing || error) {
+    if (!playing || error || showSettings) {
       setShowControls(true);
       return;
     }
 
     const hideControls = () => {
-      if (videoRef.current && !videoRef.current.paused) {
+      if (videoRef.current && !videoRef.current.paused && !showSettings) {
         setShowControls(false);
       }
     };
@@ -44,7 +96,9 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
       if (controlsTimeoutRef.current) {
         clearTimeout(controlsTimeoutRef.current);
       }
-      controlsTimeoutRef.current = setTimeout(hideControls, 3000);
+      if (!showSettings) {
+        controlsTimeoutRef.current = setTimeout(hideControls, 3000);
+      }
     };
 
     controlsTimeoutRef.current = setTimeout(hideControls, 3000);
@@ -68,31 +122,58 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
         playerElement.removeEventListener('touchstart', showAndResetTimeout);
       }
     };
-  }, [playing, error]);
+  }, [playing, error, showSettings]);
+
+  // Update time and buffer
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const updateTime = () => {
+      setCurrentTime(video.currentTime);
+      setDuration(video.duration);
+      
+      // Update buffered amount
+      if (video.buffered.length > 0) {
+        const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+        const bufferedAmount = (bufferedEnd / video.duration) * 100;
+        setBuffered(bufferedAmount);
+      }
+    };
+
+    video.addEventListener('timeupdate', updateTime);
+    video.addEventListener('loadedmetadata', updateTime);
+    video.addEventListener('progress', updateTime);
+
+    return () => {
+      video.removeEventListener('timeupdate', updateTime);
+      video.removeEventListener('loadedmetadata', updateTime);
+      video.removeEventListener('progress', updateTime);
+    };
+  }, []);
 
   const isHLSStream = (url: string): boolean => {
-    return url.includes('.m3u8') || 
-           url.includes('.m3u') || 
-           url.includes('application/x-mpegURL') ||
-           url.includes('application/vnd.apple.mpegurl');
+    const lowerUrl = url.toLowerCase();
+    return lowerUrl.includes('.m3u8') || 
+           lowerUrl.includes('.m3u') || 
+           lowerUrl.includes('application/x-mpegurl') ||
+           lowerUrl.includes('application/vnd.apple.mpegurl');
   };
 
   const initializePlayer = useCallback(() => {
     if (!videoRef.current || !isClient) return;
 
     const videoElement = videoRef.current;
+    const currentStreamUrl = servers[currentServer - 1].url;
     
     // Build the proxied URL with optional cookie
-    let proxiedUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}`;
+    let proxiedUrl = `/api/proxy?url=${encodeURIComponent(currentStreamUrl)}`;
     if (authCookie) {
       proxiedUrl += `&cookie=${encodeURIComponent(authCookie)}`;
     }
 
     console.log('Initializing player with URL:', proxiedUrl);
-    console.log('Is HLS stream:', isHLSStream(streamUrl));
-    if (authCookie) {
-      console.log('Authentication cookie provided');
-    }
+    console.log('Current server:', currentServer);
 
     setError(null);
     setIsLoading(true);
@@ -107,9 +188,8 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
     videoElement.load();
     setPlaying(false);
 
-    // Check if this is an HLS stream
-    if (isHLSStream(streamUrl)) {
-      // HLS Stream handling
+    // Check if this is an HLS stream or M3U playlist
+    if (isHLSStream(currentStreamUrl) || isM3UPlaylist) {
       if (Hls.isSupported()) {
         const hls = new Hls({
           debug: false,
@@ -118,7 +198,7 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
           backBufferLength: 90,
           maxBufferLength: 30,
           maxMaxBufferLength: 600,
-          maxBufferSize: 60 * 1000 * 1000, // 60 MB
+          maxBufferSize: 60 * 1000 * 1000,
           maxBufferHole: 0.5,
           highBufferWatchdogPeriod: 2,
           nudgeOffset: 0.1,
@@ -137,9 +217,22 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
         hls.loadSource(proxiedUrl);
         hls.attachMedia(videoElement);
 
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
           console.log('Manifest parsed successfully');
           setIsLoading(false);
+          
+          // Get quality levels
+          const levels = hls.levels.map((level, index) => ({
+            height: level.height,
+            level: index,
+            bitrate: level.bitrate
+          }));
+          setQualityLevels(levels);
+          setCurrentQuality(hls.currentLevel);
+          
+          // Check if it's a live stream
+          setIsLive(data.levels[0]?.details?.live || true);
+          
           videoElement.play().catch(e => {
             console.warn('Autoplay prevented:', e);
             if (e.name === "NotAllowedError") {
@@ -148,31 +241,31 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
           });
         });
 
+        hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+          console.log('Quality level switched to:', data.level);
+          setCurrentQuality(data.level);
+        });
+
         hls.on(Hls.Events.ERROR, (event, data) => {
           console.error('HLS Error:', data);
           
           if (data.fatal) {
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
-                console.error('Fatal network error encountered, details:', data.details);
-                
-                if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR) {
-                  setError('Unable to load stream. This might be due to authentication issues or the stream being offline.');
-                  setIsLoading(false);
-                } else if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
-                  setError('Unable to load video segments. Authentication might be required or expired.');
-                  setIsLoading(false);
+                if (retryCount < 3) {
+                  setTimeout(() => {
+                    console.log('Attempting to recover from network error...');
+                    hls.startLoad();
+                    setRetryCount(prev => prev + 1);
+                  }, 2000);
+                } else if (currentServer < servers.length) {
+                  // Try next server
+                  console.log('Trying next server...');
+                  setCurrentServer(prev => prev + 1);
+                  setRetryCount(0);
                 } else {
-                  if (retryCount < 3) {
-                    setTimeout(() => {
-                      console.log('Attempting to recover from network error...');
-                      hls.startLoad();
-                      setRetryCount(prev => prev + 1);
-                    }, 2000);
-                  } else {
-                    setError('Network error: Unable to load the stream. Please check your connection or authentication.');
-                    setIsLoading(false);
-                  }
+                  setError('Network error: Unable to load the stream from any server.');
+                  setIsLoading(false);
                 }
                 break;
                 
@@ -182,23 +275,16 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
                 break;
                 
               default:
-                setError(`Stream error: ${data.details || 'Unknown error'}. The stream might be offline or require authentication.`);
+                setError(`Stream error: ${data.details || 'Unknown error'}`);
                 setIsLoading(false);
                 hls.destroy();
                 break;
             }
-          } else {
-            console.warn('Non-fatal HLS error:', data.details);
           }
         });
 
         hls.on(Hls.Events.LEVEL_LOADED, () => {
-          console.log('Level loaded');
           setIsLoading(false);
-          setRetryCount(0);
-        });
-
-        hls.on(Hls.Events.FRAG_LOADED, () => {
           setRetryCount(0);
         });
 
@@ -208,28 +294,9 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
         videoElement.src = proxiedUrl;
       }
     } else {
-      // Direct HTTP stream or other format
-      console.log('Using direct video playback (non-HLS)');
+      // Direct stream
+      console.log('Using direct video playback');
       videoElement.src = proxiedUrl;
-      
-      // For direct streams, we might need to set the type
-      const sourceElement = document.createElement('source');
-      sourceElement.src = proxiedUrl;
-      
-      // Try to determine the MIME type
-      if (streamUrl.includes('.mp4')) {
-        sourceElement.type = 'video/mp4';
-      } else if (streamUrl.includes('.webm')) {
-        sourceElement.type = 'video/webm';
-      } else if (streamUrl.includes('.ogg')) {
-        sourceElement.type = 'video/ogg';
-      } else {
-        // For unknown types, let the browser figure it out
-        sourceElement.type = 'video/mp4'; // Default to mp4
-      }
-      
-      videoElement.innerHTML = '';
-      videoElement.appendChild(sourceElement);
     }
 
     // Common video element event listeners
@@ -246,32 +313,14 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
 
     const handleError = () => {
       console.error('Video error');
-      const videoError = videoElement.error;
-      let errorMessage = 'Unable to play this stream.';
-      
-      if (videoError) {
-        console.error('Video error code:', videoError.code);
-        console.error('Video error message:', videoError.message);
-        
-        switch (videoError.code) {
-          case videoError.MEDIA_ERR_NETWORK:
-            errorMessage = 'Network error while loading the stream. The stream might be offline or require authentication.';
-            break;
-          case videoError.MEDIA_ERR_DECODE:
-            errorMessage = 'Unable to decode the stream. The format might not be supported.';
-            break;
-          case videoError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-            errorMessage = 'Stream format not supported. This might be a codec issue or the stream requires special handling.';
-            break;
-          case videoError.MEDIA_ERR_ABORTED:
-            errorMessage = 'Stream loading was aborted.';
-            break;
-        }
+      if (currentServer < servers.length && retryCount < 1) {
+        console.log('Trying next server...');
+        setCurrentServer(prev => prev + 1);
+        setRetryCount(0);
+      } else {
+        setError('Unable to play this stream from any server.');
+        setIsLoading(false);
       }
-      
-      setIsLoading(false);
-      setPlaying(false);
-      setError(errorMessage);
     };
 
     const onPlay = () => setPlaying(true);
@@ -279,14 +328,6 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
     const onWaiting = () => setIsLoading(true);
     const onPlaying = () => setIsLoading(false);
     const onCanPlay = () => setIsLoading(false);
-    const onLoadStart = () => {
-      console.log('Load started');
-      setIsLoading(true);
-    };
-    const onCanPlayThrough = () => {
-      console.log('Can play through');
-      setIsLoading(false);
-    };
 
     videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
     videoElement.addEventListener('error', handleError);
@@ -295,8 +336,6 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
     videoElement.addEventListener('waiting', onWaiting);
     videoElement.addEventListener('playing', onPlaying);
     videoElement.addEventListener('canplay', onCanPlay);
-    videoElement.addEventListener('loadstart', onLoadStart);
-    videoElement.addEventListener('canplaythrough', onCanPlayThrough);
 
     return () => {
       if (hlsRef.current) {
@@ -310,10 +349,8 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
       videoElement.removeEventListener('waiting', onWaiting);
       videoElement.removeEventListener('playing', onPlaying);
       videoElement.removeEventListener('canplay', onCanPlay);
-      videoElement.removeEventListener('loadstart', onLoadStart);
-      videoElement.removeEventListener('canplaythrough', onCanPlayThrough);
     };
-  }, [streamUrl, authCookie, isClient, retryCount]);
+  }, [servers, currentServer, authCookie, isClient, retryCount, isM3UPlaylist]);
 
   useEffect(() => {
     const cleanup = initializePlayer();
@@ -327,6 +364,7 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
 
   const handleRetry = () => {
     setRetryCount(0);
+    setCurrentServer(1);
     initializePlayer();
   };
 
@@ -347,16 +385,107 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
     }
   };
 
-  const toggleFullscreen = () => {
+  const toggleFullscreen = async () => {
     if (!playerWrapperRef.current) return;
     
-    if (!document.fullscreenElement) {
-      playerWrapperRef.current.requestFullscreen().catch(console.error);
-      setFullscreen(true);
-    } else {
-      document.exitFullscreen().catch(console.error);
-      setFullscreen(false);
+    try {
+      if (!document.fullscreenElement) {
+        // Request fullscreen
+        await playerWrapperRef.current.requestFullscreen();
+        
+        // Force landscape orientation on mobile
+        if ('orientation' in screen && 'lock' in screen.orientation) {
+          try {
+            await screen.orientation.lock('landscape');
+          } catch (e) {
+            console.log('Orientation lock not supported');
+          }
+        }
+        
+        setFullscreen(true);
+      } else {
+        // Exit fullscreen
+        await document.exitFullscreen();
+        
+        // Unlock orientation
+        if ('orientation' in screen && 'unlock' in screen.orientation) {
+          try {
+            screen.orientation.unlock();
+          } catch (e) {
+            console.log('Orientation unlock not supported');
+          }
+        }
+        
+        setFullscreen(false);
+      }
+    } catch (error) {
+      console.error('Fullscreen error:', error);
     }
+  };
+
+  const togglePiP = async () => {
+    if (!videoRef.current) return;
+    
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+                setPip(false);
+      } else if (document.pictureInPictureEnabled) {
+        await videoRef.current.requestPictureInPicture();
+        setPip(true);
+      }
+    } catch (error) {
+      console.error('PiP error:', error);
+    }
+  };
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!progressRef.current || !videoRef.current || isLive) return;
+    
+    const rect = progressRef.current.getBoundingClientRect();
+    const pos = (e.clientX - rect.left) / rect.width;
+    const newTime = pos * duration;
+    
+    videoRef.current.currentTime = newTime;
+  };
+
+  const handleQualityChange = (level: number) => {
+    if (hlsRef.current) {
+      hlsRef.current.currentLevel = level;
+      setCurrentQuality(level);
+      setShowQuality(false);
+      setShowSettings(false);
+    }
+  };
+
+  const handleServerChange = (serverIndex: number) => {
+    setCurrentServer(serverIndex);
+    setRetryCount(0);
+    setShowServers(false);
+    setShowSettings(false);
+  };
+
+  const formatTime = (seconds: number): string => {
+    if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getQualityLabel = (level: QualityLevel): string => {
+    if (level.height >= 2160) return '4K';
+    if (level.height >= 1440) return '1440p';
+    if (level.height >= 1080) return '1080p';
+    if (level.height >= 720) return '720p';
+    if (level.height >= 480) return '480p';
+    if (level.height >= 360) return '360p';
+    return `${level.height}p`;
   };
 
   useEffect(() => {
@@ -364,8 +493,19 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
       setFullscreen(!!document.fullscreenElement);
     };
 
+    const handlePiPChange = () => {
+      setPip(!!document.pictureInPictureElement);
+    };
+
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('enterpictureinpicture', handlePiPChange);
+    document.addEventListener('leavepictureinpicture', handlePiPChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('enterpictureinpicture', handlePiPChange);
+      document.removeEventListener('leavepictureinpicture', handlePiPChange);
+    };
   }, []);
 
   if (!isClient) {
@@ -384,17 +524,9 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
             <div className="max-w-md">
               <h3 className="text-xl font-semibold mb-2">Stream Error</h3>
               <p className="mb-4 text-sm">{error}</p>
-              {authCookie && (
-                <p className="text-xs text-gray-400 mb-4">
-                  Note: This stream requires authentication. Make sure the authentication cookie is valid and not expired.
-                </p>
-              )}
               <div className="flex gap-2 justify-center">
                 <button onClick={handleRetry} className="play-btn flex items-center gap-2">
-                  <RotateIcon size={18} /> Retry
-                </button>
-                <button onClick={() => window.location.reload()} className="play-btn flex items-center gap-2">
-                                    <RotateIcon size={18} /> Reload Page
+                  <RotateIcon size={18} /> Retry All Servers
                 </button>
               </div>
             </div>
@@ -416,7 +548,7 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
           <div className="player-loading-indicator show">
             <div className="loading-spinner"></div>
             <div className="loading-text">
-              {retryCount > 0 ? `Retrying... (${retryCount}/3)` : 'Loading stream...'}
+              Loading from {servers[currentServer - 1]?.label || 'Server'}...
             </div>
           </div>
         )}
@@ -428,11 +560,31 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
                 {playing ? <PauseIcon /> : <PlayIcon />}
               </button>
             </div>
+            
             <div className="top-controls">
               <div className="player-title">{channelName}</div>
-              <div className="live-indicator">LIVE</div>
+              {isLive && <div className="live-indicator">LIVE</div>}
             </div>
+            
             <div className="custom-controls">
+              {/* Progress bar - only show for non-live content */}
+              {!isLive && (
+                <div 
+                  ref={progressRef}
+                  className="progress-container"
+                  onClick={handleSeek}
+                >
+                  <div 
+                    className="progress-buffered" 
+                    style={{ width: `${buffered}%` }}
+                  />
+                  <div 
+                    className="progress-bar" 
+                    style={{ width: `${(currentTime / duration) * 100}%` }}
+                  />
+                </div>
+              )}
+              
               <div className="controls-bottom">
                 <div className="controls-left">
                   <button className="control-button" onClick={handlePlayPause}>
@@ -441,8 +593,118 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
                   <button className="control-button" onClick={handleMute}>
                     {muted ? <VolumeMuteIcon /> : <VolumeMaxIcon />}
                   </button>
+                  {!isLive && (
+                    <div className="time-display">
+                      {formatTime(currentTime)} / {formatTime(duration)}
+                    </div>
+                  )}
                 </div>
+                
                 <div className="controls-right">
+                  {/* Settings button */}
+                  <div className="relative">
+                    <button 
+                      className="control-button" 
+                      onClick={() => {
+                        setShowSettings(!showSettings);
+                        setShowQuality(false);
+                        setShowServers(false);
+                      }}
+                    >
+                      <SettingsIcon />
+                    </button>
+                    
+                    {/* Settings menu */}
+                    {showSettings && (
+                      <div className="quality-menu" style={{ display: 'block' }}>
+                        <div className="quality-menu-header">Settings</div>
+                        
+                        {/* Quality option */}
+                        {qualityLevels.length > 0 && (
+                          <div 
+                            className="quality-option"
+                            onClick={() => {
+                              setShowQuality(!showQuality);
+                              setShowServers(false);
+                            }}
+                          >
+                            <span>Quality</span>
+                            <span className="text-xs">
+                              {currentQuality === -1 ? 'Auto' : getQualityLabel(qualityLevels[currentQuality])}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {/* Server option */}
+                        {servers.length > 1 && (
+                          <div 
+                            className="quality-option"
+                            onClick={() => {
+                              setShowServers(!showServers);
+                              setShowQuality(false);
+                            }}
+                          >
+                            <span>Server</span>
+                            <span className="text-xs">{servers[currentServer - 1]?.label}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Quality submenu */}
+                    {showQuality && (
+                      <div className="quality-menu" style={{ display: 'block', right: '120px' }}>
+                        <div className="quality-menu-header">Quality</div>
+                        <div 
+                          className={`quality-option ${currentQuality === -1 ? 'active' : ''}`}
+                          onClick={() => handleQualityChange(-1)}
+                        >
+                          <span>Auto</span>
+                          {currentQuality === -1 && <CheckIcon size={16} />}
+                        </div>
+                        {qualityLevels.map((level) => (
+                          <div 
+                            key={level.level}
+                            className={`quality-option ${currentQuality === level.level ? 'active' : ''}`}
+                            onClick={() => handleQualityChange(level.level)}
+                          >
+                            <span>{getQualityLabel(level)}</span>
+                            {currentQuality === level.level && <CheckIcon size={16} />}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Server submenu */}
+                    {showServers && (
+                      <div className="quality-menu" style={{ display: 'block', right: '120px' }}>
+                        <div className="quality-menu-header">Select Server</div>
+                        {servers.map((server, index) => (
+                          <div 
+                            key={index}
+                            className={`quality-option ${currentServer === index + 1 ? 'active' : ''}`}
+                            onClick={() => handleServerChange(index + 1)}
+                          >
+                            <span>{server.label}</span>
+                            {currentServer === index + 1 && <CheckIcon size={16} />}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* PiP button */}
+                  {document.pictureInPictureEnabled && (
+                    <button 
+                      className="control-button" 
+                      onClick={togglePiP}
+                      title="Picture in Picture"
+                    >
+                      <PipIcon />
+                    </button>
+                  )}
+                  
+                  {/* Fullscreen button */}
                   <button className="control-button" onClick={toggleFullscreen}>
                     {fullscreen ? <FullscreenExitIcon /> : <FullscreenEnterIcon />}
                   </button>
