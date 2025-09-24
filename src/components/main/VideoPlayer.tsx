@@ -14,6 +14,16 @@ import {
   CheckIcon
 } from './Icons';
 
+// Type definitions for Screen Orientation API
+declare global {
+  interface Screen {
+    orientation?: {
+      lock?: (orientation: string) => Promise<void>;
+      unlock?: () => void;
+    };
+  }
+}
+
 interface VideoPlayerProps {
   streamUrl: string;
   streamUrl2?: string;
@@ -393,8 +403,8 @@ const VideoPlayer = ({
         // Request fullscreen
         await playerWrapperRef.current.requestFullscreen();
         
-        // Force landscape orientation on mobile
-        if ('orientation' in screen && 'lock' in screen.orientation) {
+        // Force landscape orientation on mobile with proper type checking
+        if (screen?.orientation?.lock) {
           try {
             await screen.orientation.lock('landscape');
           } catch (e) {
@@ -407,8 +417,8 @@ const VideoPlayer = ({
         // Exit fullscreen
         await document.exitFullscreen();
         
-        // Unlock orientation
-        if ('orientation' in screen && 'unlock' in screen.orientation) {
+        // Unlock orientation with proper type checking
+        if (screen?.orientation?.unlock) {
           try {
             screen.orientation.unlock();
           } catch (e) {
@@ -429,7 +439,7 @@ const VideoPlayer = ({
     try {
       if (document.pictureInPictureElement) {
         await document.exitPictureInPicture();
-                setPip(false);
+        setPip(false);
       } else if (document.pictureInPictureEnabled) {
         await videoRef.current.requestPictureInPicture();
         setPip(true);
