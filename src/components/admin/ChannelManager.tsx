@@ -47,12 +47,12 @@ export default function ChannelManager() {
       }
 
       const data = {
-        name: current.name.trim(),
-        logoUrl: current.logoUrl.trim(),
-        streamUrl: current.streamUrl.trim(),
-        categoryId: current.categoryId,
+        name: current.name?.trim() ?? "",
+        logoUrl: current.logoUrl?.trim() ?? "",
+        streamUrl: current.streamUrl?.trim() ?? "",
+        categoryId: current.categoryId ?? "",
         categoryName: category.name,
-        authCookie: current.authCookie?.trim() || null
+        authCookie: current.authCookie?.trim() || null,
       };
 
       if (isEditing && current.id) {
@@ -98,7 +98,7 @@ export default function ChannelManager() {
       <form onSubmit={handleSubmit} className="md:col-span-1 bg-gray-800 p-6 rounded-lg space-y-4">
         <h3 className="text-xl font-semibold">{isEditing ? 'Edit' : 'Add'} Channel</h3>
         <input 
-          value={current.name} 
+          value={current.name ?? ''} 
           onChange={e => setCurrent({...current, name: e.target.value})} 
           placeholder="Channel Name" 
           className="form-input" 
@@ -106,7 +106,7 @@ export default function ChannelManager() {
         />
         <input 
           type="url" 
-          value={current.logoUrl} 
+          value={current.logoUrl ?? ''} 
           onChange={e => setCurrent({...current, logoUrl: e.target.value})} 
           placeholder="Logo URL" 
           className="form-input" 
@@ -114,7 +114,7 @@ export default function ChannelManager() {
         />
         <input 
           type="url" 
-          value={current.streamUrl} 
+          value={current.streamUrl ?? ''} 
           onChange={e => setCurrent({...current, streamUrl: e.target.value})} 
           placeholder="Stream URL (m3u8)" 
           className="form-input" 
@@ -124,7 +124,7 @@ export default function ChannelManager() {
         <div className="space-y-2">
           <label className="text-sm text-gray-400">Authentication Cookie (Optional)</label>
           <textarea 
-            value={current.authCookie || ''} 
+            value={current.authCookie ?? ''} 
             onChange={e => setCurrent({...current, authCookie: e.target.value})} 
             placeholder="Edge-Cache-Cookie=URLPrefix=..." 
             className="form-input min-h-[80px] font-mono text-xs"
@@ -133,7 +133,7 @@ export default function ChannelManager() {
         </div>
         
         <select 
-          value={current.categoryId} 
+          value={current.categoryId ?? ''} 
           onChange={e => setCurrent({...current, categoryId: e.target.value})} 
           className="form-input" 
           required
