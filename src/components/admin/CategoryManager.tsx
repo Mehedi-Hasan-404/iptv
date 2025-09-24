@@ -4,49 +4,59 @@ import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, order
 import { db } from '@/lib/firebase/client';
 import { Category } from '@/types';
 
+const createSlug = (name: string) => {
+  return name
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+};
+
 export default function CategoryManager() {
   const [categories, setCategories] = useState<Category[]>([]);
-  const [current, setCurrent] = useState<Partial<Category>>({ 
-    name: '', 
-    iconUrl: '', 
-    slug: '' 
-  });
+  const [current, setCurrent] = useState<{ id?: string; name: string; iconUrl: string }>({ name: '', iconUrl: '' });
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, "categories"), orderBy("name"));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() } as Category)));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category)));
     });
-    
-    return () => unsubscribe();
+    return () => unsub();
   }, []);
-
-  const generateSlug = (name: string) => {
-    return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!current.name || !current.iconUrl) return;
-
-    const slug = current.slug || generateSlug(current.name);
-    const data = {
-      name: current.name,
-      iconUrl: current.iconUrl,
-      slug
-    };
-
+    setLoading(true);
+    
     try {
+      const slug = createSlug(current.name);
+      if (!slug) {
+        alert("Category name cannot be empty or invalid.");
+        setLoading(false);
+        return;
+      }
+
+      const dataToSave = {
+        name: current.name.trim(),
+        iconUrl: current.iconUrl.trim(),
+        slug: slug
+      };
+
       if (isEditing && current.id) {
-        await updateDoc(doc(db, 'categories', current.id), data);
+        await updateDoc(doc(db, 'categories', current.id), dataToSave);
+        alert('Category updated successfully!');
       } else {
-        await addDoc(collection(db, 'categories'), data);
+        await addDoc(collection(db, 'categories'), dataToSave);
+        alert('Category added successfully!');
       }
       resetForm();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving category:', error);
-      alert('Error saving category. Please try again.');
+      alert(`Error saving category: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -56,19 +66,20 @@ export default function CategoryManager() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Delete this category? All channels in this category will need to be reassigned.')) {
+    if (confirm('Delete this category?')) {
       try {
         await deleteDoc(doc(db, 'categories', id));
-      } catch (error) {
+        alert('Category deleted successfully!');
+      } catch (error: any) {
         console.error('Error deleting category:', error);
-        alert('Error deleting category. Please try again.');
+        alert(`Error deleting category: ${error.message}`);
       }
     }
   };
   
   const resetForm = () => {
     setIsEditing(false);
-    setCurrent({ name: '', iconUrl: '', slug: '' });
+    setCurrent({ name: '', iconUrl: '' });
   };
 
   return (
@@ -76,45 +87,35 @@ export default function CategoryManager() {
       <form onSubmit={handleSubmit} className="md:col-span-1 bg-gray-800 p-6 rounded-lg space-y-4">
         <h3 className="text-xl font-semibold">{isEditing ? 'Edit' : 'Add'} Category</h3>
         <input 
-          value={current.name || ''} 
+          value={current.name} 
           onChange={e => setCurrent({...current, name: e.target.value})} 
           placeholder="Category Name" 
           className="form-input" 
-          required 
+          required
         />
         <input 
           type="url" 
-          value={current.iconUrl || ''} 
+          value={current.iconUrl} 
           onChange={e => setCurrent({...current, iconUrl: e.target.value})} 
           placeholder="Icon URL" 
           className="form-input" 
-          required 
+          required
         />
-        <input 
-          value={current.slug || ''} 
-          onChange={e => setCurrent({...current, slug: e.target.value})} 
-          placeholder="URL Slug (auto-generated if empty)" 
-          className="form-input" 
-          pattern="[a-z0-9-]+"
-        />
-        
         <div className="flex gap-2">
-          <button type="submit" className="play-btn flex-grow">{isEditing ? 'Update' : 'Save'}</button>
+          <button type="submit" disabled={loading} className="play-btn flex-grow">
+            {loading ? 'Saving...' : (isEditing ? 'Update' : 'Save')}
+          </button>
           {isEditing && <button type="button" onClick={resetForm} className="bg-gray-500 text-white px-4 rounded">Cancel</button>}
         </div>
       </form>
-      
       <div className="md:col-span-2 bg-gray-800 p-6 rounded-lg">
-        <h3 className="text-xl font-semibold mb-4">Existing Categories</h3>
-        <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+        <h3 className="text-xl font-semibold mb-4">Existing Categories ({categories.length})</h3>
+        <div className="space-y-2">
           {categories.map(cat => (
             <div key={cat.id} className="flex justify-between items-center bg-gray-700 p-3 rounded">
               <div className='flex items-center gap-3'>
-                <img src={cat.iconUrl} alt={cat.name} className="w-10 h-10 object-contain" />
-                <div>
-                  <p>{cat.name}</p>
-                  <p className='text-xs text-gray-400'>/{cat.slug}</p>
-                </div>
+                <img src={cat.iconUrl} alt={cat.name} className="w-8 h-8 rounded-full object-cover" />
+                {cat.name}
               </div>
               <div className="flex gap-3">
                 <button onClick={() => handleEdit(cat)} className="text-sm text-blue-400">Edit</button>
