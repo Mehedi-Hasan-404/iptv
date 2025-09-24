@@ -85,19 +85,20 @@ export async function GET(request: NextRequest) {
     console.log('Cookie header set:', cookieValue.substring(0, 50) + '...');
   }
 
-  // Accept headers
-  requestHeadersToForward.set('Accept', '*/*');
+  // Accept headers - updated to accept video formats
+  requestHeadersToForward.set('Accept', 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5');
   requestHeadersToForward.set('Accept-Language', 'en-US,en;q=0.9');
   requestHeadersToForward.set('Accept-Encoding', 'gzip, deflate, br');
   requestHeadersToForward.set('Connection', 'keep-alive');
-  requestHeadersToForward.set('Sec-Fetch-Dest', 'empty');
-  requestHeadersToForward.set('Sec-Fetch-Mode', 'cors');
+  requestHeadersToForward.set('Sec-Fetch-Dest', 'video');
+  requestHeadersToForward.set('Sec-Fetch-Mode', 'no-cors');
   requestHeadersToForward.set('Sec-Fetch-Site', 'cross-site');
   
   // Range support
   const range = request.headers.get('range');
   if (range) {
     requestHeadersToForward.set('Range', range);
+    console.log('Range header:', range);
   }
 
   // Log all headers being sent (for debugging)
@@ -144,7 +145,7 @@ export async function GET(request: NextRequest) {
     const newHeaders = new Headers();
     
     // Copy important headers
-    ['content-type', 'content-length', 'accept-ranges', 'content-range', 'etag', 'last-modified'].forEach(header => {
+    ['content-type', 'content-length', 'accept-ranges', 'content-range', 'etag', 'last-modified', 'cache-control'].forEach(header => {
       const value = response.headers.get(header);
       if (value) {
         newHeaders.set(header, value);
@@ -158,8 +159,10 @@ export async function GET(request: NextRequest) {
     newHeaders.set('Access-Control-Allow-Headers', '*');
     newHeaders.set('Access-Control-Allow-Credentials', 'true');
     
-    // Cache control
-    newHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    // Cache control for video streams
+    if (!newHeaders.has('Cache-Control')) {
+      newHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
 
     // Check if this is an M3U8 playlist
     const isM3U8 = contentType.includes('mpegurl') || 
@@ -222,6 +225,11 @@ export async function GET(request: NextRequest) {
         status: 200, 
         headers: newHeaders 
       });
+    }
+
+    // For video streams, ensure proper content type
+    if (!contentType && (decodedUrl.includes('/play/') || decodedUrl.includes('stream'))) {
+      newHeaders.set('Content-Type', 'video/mp4');
     }
 
     // For segments and other content
