@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Hls from 'hls.js';
 import { PauseIcon, PlayIcon, FullscreenEnterIcon, FullscreenExitIcon, VolumeMaxIcon, VolumeMuteIcon, RotateIcon } from './Icons';
 
@@ -26,7 +26,6 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
 
   useEffect(() => setIsClient(true), []);
 
-  // Controls visibility logic
   useEffect(() => {
     if (!playing || error) {
       setShowControls(true);
@@ -54,7 +53,6 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
       playerElement.addEventListener('mousemove', showAndResetTimeout);
       playerElement.addEventListener('mouseenter', showAndResetTimeout);
       playerElement.addEventListener('mouseleave', hideControls);
-      playerElement.addEventListener('touchstart', showAndResetTimeout);
     }
     
     return () => {
@@ -65,31 +63,21 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
         playerElement.removeEventListener('mousemove', showAndResetTimeout);
         playerElement.removeEventListener('mouseenter', showAndResetTimeout);
         playerElement.removeEventListener('mouseleave', hideControls);
-        playerElement.removeEventListener('touchstart', showAndResetTimeout);
       }
     };
   }, [playing, error]);
 
-  const initializePlayer = useCallback(() => {
+  const initializePlayer = () => {
     if (!videoRef.current || !isClient) return;
 
     const videoElement = videoRef.current;
+    const playUrl = streamUrl;
     
-    // Build the proxied URL with optional cookie
-    let proxiedUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}`;
-    if (authCookie) {
-      proxiedUrl += `&cookie=${encodeURIComponent(authCookie)}`;
-    }
-
-    console.log('Initializing player with URL:', proxiedUrl);
-    if (authCookie) {
-      console.log('Authentication cookie provided');
-    }
+    console.log('Initializing player');
 
     setError(null);
     setIsLoading(true);
 
-    // Clean up previous instance
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
@@ -107,7 +95,7 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
         backBufferLength: 90,
         maxBufferLength: 30,
         maxMaxBufferLength: 600,
-        maxBufferSize: 60 * 1000 * 1000, // 60 MB
+        maxBufferSize: 60 * 1000 * 1000,
         maxBufferHole: 0.5,
         highBufferWatchdogPeriod: 2,
         nudgeOffset: 0.1,
@@ -117,13 +105,23 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
         liveMaxLatencyDurationCount: Infinity,
         liveDurationInfinity: true,
         preferManagedMediaSource: true,
-        xhrSetup: function(xhr: XMLHttpRequest) {
-          xhr.withCredentials = false;
+        xhrSetup: function(xhr, url) {
+          if (authCookie) {
+            xhr.setRequestHeader('Cookie', authCookie);
+            xhr.withCredentials = true;
+          }
+          try {
+            const urlObj = new URL(url);
+            xhr.setRequestHeader('Origin', urlObj.origin);
+            xhr.setRequestHeader('Referer', urlObj.origin + '/');
+          } catch (e) {
+            // Ignore URL parsing errors
+          }
         }
       });
 
       hlsRef.current = hls;
-      hls.loadSource(proxiedUrl);
+      hls.loadSource(playUrl);
       hls.attachMedia(videoElement);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -143,60 +141,42 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              console.error('Fatal network error encountered, details:', data.details);
-              
-              if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR) {
-                setError('Unable to load stream. This might be due to authentication issues or the stream being offline.');
-                setIsLoading(false);
-              } else if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
-                setError('Unable to load video segments. Authentication might be required or expired.');
-                setIsLoading(false);
+              if (retryCount < 3) {
+                setTimeout(() => {
+                  console.log('Attempting to recover from network error...');
+                  hls.startLoad();
+                  setRetryCount(prev => prev + 1);
+                }, 2000);
               } else {
-                if (retryCount < 3) {
-                  setTimeout(() => {
-                    console.log('Attempting to recover from network error...');
-                    hls.startLoad();
-                    setRetryCount(prev => prev + 1);
-                  }, 2000);
-                } else {
-                  setError('Network error: Unable to load the stream. Please check your connection or authentication.');
-                  setIsLoading(false);
-                }
+                setError('Network error: Unable to load the stream.');
+                setIsLoading(false);
               }
               break;
               
             case Hls.ErrorTypes.MEDIA_ERROR:
-              console.error('Fatal media error encountered, details:', data.details);
+              console.error('Fatal media error encountered');
               hls.recoverMediaError();
               break;
               
             default:
-              setError(`Stream error: ${data.details || 'Unknown error'}. The stream might be offline or require authentication.`);
+              setError(`Stream error: ${data.details || 'Unknown error'}.`);
               setIsLoading(false);
               hls.destroy();
               break;
           }
-        } else {
-          console.warn('Non-fatal HLS error:', data.details);
         }
       });
 
       hls.on(Hls.Events.LEVEL_LOADED, () => {
-        console.log('Level loaded');
         setIsLoading(false);
         setRetryCount(0);
       });
 
-      hls.on(Hls.Events.FRAG_LOADED, () => {
-        setRetryCount(0);
-      });
-
     } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native HLS support (Safari)
       console.log('Using native HLS support');
-      videoElement.src = proxiedUrl;
+      videoElement.src = playUrl;
       
-      const handleLoadedMetadata = () => {
+            const handleLoadedMetadata = () => {
         setIsLoading(false);
         videoElement.play().catch(e => {
           console.warn('Native play prevented:', e);
@@ -206,28 +186,11 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
         });
       };
 
-      const handleError = () => {
-        console.error('Native video error');
-        const videoError = videoElement.error;
-        let errorMessage = 'Unable to play this stream.';
-        
-        if (videoError) {
-          switch (videoError.code) {
-            case videoError.MEDIA_ERR_NETWORK:
-              errorMessage = 'Network error while loading the stream. Authentication might be required.';
-              break;
-            case videoError.MEDIA_ERR_DECODE:
-              errorMessage = 'Unable to decode the stream.';
-              break;
-            case videoError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-              errorMessage = 'Stream format not supported or authentication failed.';
-              break;
-          }
-        }
-        
+      const handleError = (e: Event) => {
+        console.error('Native video error:', e);
         setIsLoading(false);
         setPlaying(false);
-        setError(errorMessage);
+        setError('Unable to play this stream.');
       };
 
       videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
@@ -242,7 +205,6 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
       setError('Your browser does not support HLS streaming.');
     }
 
-    // Video element event listeners
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onWaiting = () => setIsLoading(true);
@@ -250,12 +212,7 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
     const onCanPlay = () => setIsLoading(false);
     const onError = () => {
       setIsLoading(false);
-      const videoError = videoElement.error;
-      if (videoError && videoError.code === MediaError.MEDIA_ERR_NETWORK) {
-        setError('Network error. The stream might require authentication or be unavailable.');
-      } else {
-        setError('Video playback error. The stream might be unavailable.');
-      }
+      setError('Video playback error.');
     };
 
     videoElement.addEventListener('play', onPlay);
@@ -277,7 +234,7 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
       videoElement.removeEventListener('canplay', onCanPlay);
       videoElement.removeEventListener('error', onError);
     };
-  }, [streamUrl, authCookie, isClient, retryCount]);
+  };
 
   useEffect(() => {
     const cleanup = initializePlayer();
@@ -287,7 +244,7 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
         clearTimeout(controlsTimeoutRef.current);
       }
     };
-  }, [initializePlayer]);
+  }, [streamUrl, authCookie, isClient]);
 
   const handleRetry = () => {
     setRetryCount(0);
@@ -297,7 +254,7 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
   const handlePlayPause = () => {
     if (videoRef.current) {
       if (videoRef.current.paused) {
-        videoRef.current.play().catch(console.error);
+        videoRef.current.play();
       } else {
         videoRef.current.pause();
       }
@@ -313,24 +270,14 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
 
   const toggleFullscreen = () => {
     if (!playerWrapperRef.current) return;
-    
     if (!document.fullscreenElement) {
-      playerWrapperRef.current.requestFullscreen().catch(console.error);
+      playerWrapperRef.current.requestFullscreen();
       setFullscreen(true);
     } else {
-      document.exitFullscreen().catch(console.error);
+      document.exitFullscreen();
       setFullscreen(false);
     }
   };
-
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setFullscreen(!!document.fullscreenElement);
-    };
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
 
   if (!isClient) {
     return <div className="video-player"><div className="video-wrapper bg-black" /></div>;
@@ -348,11 +295,6 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
             <div className="max-w-md">
               <h3 className="text-xl font-semibold mb-2">Stream Error</h3>
               <p className="mb-4 text-sm">{error}</p>
-              {authCookie && (
-                <p className="text-xs text-gray-400 mb-4">
-                  Note: This stream requires authentication. Make sure the authentication cookie is valid and not expired.
-                </p>
-              )}
               <div className="flex gap-2 justify-center">
                 <button onClick={handleRetry} className="play-btn flex items-center gap-2">
                   <RotateIcon size={18} /> Retry
@@ -372,16 +314,17 @@ const VideoPlayer = ({ streamUrl, channelName, authCookie }: VideoPlayerProps) =
             width="100%"
             height="100%"
             style={{ objectFit: 'contain' }}
+            crossOrigin="anonymous"
           />
         )}
         
-                {isLoading && !error && (
-          <div className="player-loading-indicator show">
-            <div className="loading-spinner"></div>
-            <div className="loading-text">
-              {retryCount > 0 ? `Retrying... (${retryCount}/3)` : 'Loading stream...'}
+        {isLoading && !error && (
+            <div className="player-loading-indicator show">
+                <div className="loading-spinner"></div>
+                <div className="loading-text">
+                  {retryCount > 0 ? `Retrying... (${retryCount}/3)` : 'Loading stream...'}
+                </div>
             </div>
-          </div>
         )}
 
         {!error && (
