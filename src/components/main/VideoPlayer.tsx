@@ -525,7 +525,7 @@ const VideoPlayer = ({
   return (
     <div 
       ref={playerWrapperRef} 
-      className={`video-player ${showControls ? 'show-controls' : ''} ${playing ? 'playing' : 'paused'}`}
+      className={`video-player ${showControls ? 'show-controls' : ''} ${playing ? 'playing' : 'paused'} ${pip ? 'pip-active' : ''}`}
       onDoubleClick={toggleFullscreen}
     >
       <div className="video-wrapper">
@@ -614,7 +614,7 @@ const VideoPlayer = ({
                   {/* Settings button */}
                   <div className="relative">
                     <button 
-                      className="control-button" 
+                      className={`control-button ${showSettings ? 'active' : ''}`}
                       onClick={() => {
                         setShowSettings(!showSettings);
                         setShowQuality(false);
