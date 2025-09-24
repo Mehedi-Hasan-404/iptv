@@ -21,8 +21,13 @@ export default function ChannelManager() {
     name: '',
     logoUrl: '',
     streamUrl: '',
+    streamUrl2: '',
+    streamUrl3: '',
+    streamUrl4: '',
+    streamUrl5: '',
     categoryId: '',
     authCookie: '',
+    isM3UPlaylist: false,
   });
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -62,14 +67,30 @@ export default function ChannelManager() {
         return;
       }
 
-      const data = {
+      // Prepare the data object with all optional stream URLs
+      const data: any = {
         name: current.name?.trim() ?? '',
         logoUrl: current.logoUrl?.trim() ?? '',
         streamUrl: current.streamUrl?.trim() ?? '',
         categoryId: current.categoryId ?? '',
         categoryName: category.name,
         authCookie: current.authCookie?.trim() || null,
+        isM3UPlaylist: current.isM3UPlaylist || false,
       };
+
+      // Add optional stream URLs only if they have values
+      if (current.streamUrl2?.trim()) {
+        data.streamUrl2 = current.streamUrl2.trim();
+      }
+      if (current.streamUrl3?.trim()) {
+        data.streamUrl3 = current.streamUrl3.trim();
+      }
+      if (current.streamUrl4?.trim()) {
+        data.streamUrl4 = current.streamUrl4.trim();
+      }
+      if (current.streamUrl5?.trim()) {
+        data.streamUrl5 = current.streamUrl5.trim();
+      }
 
       if (isEditing && current.id) {
         await updateDoc(doc(db, 'channels', current.id), data);
@@ -110,9 +131,23 @@ export default function ChannelManager() {
       name: '',
       logoUrl: '',
       streamUrl: '',
+      streamUrl2: '',
+      streamUrl3: '',
+      streamUrl4: '',
+      streamUrl5: '',
       categoryId: '',
       authCookie: '',
+      isM3UPlaylist: false,
     });
+  };
+
+  const countStreamUrls = (channel: AdminChannel): number => {
+    let count = channel.streamUrl ? 1 : 0;
+    if (channel.streamUrl2) count++;
+    if (channel.streamUrl3) count++;
+    if (channel.streamUrl4) count++;
+    if (channel.streamUrl5) count++;
+    return count;
   };
 
   return (
@@ -143,14 +178,55 @@ export default function ChannelManager() {
           required
         />
 
-        <input
-          type="url"
-          value={current.streamUrl ?? ''}
-          onChange={(e) => setCurrent({ ...current, streamUrl: e.target.value })}
-          placeholder="Stream URL (m3u8)"
-          className="form-input"
-          required
-        />
+        {/* Primary Stream URL */}
+        <div className="space-y-2">
+          <label className="text-sm text-gray-400">Primary Stream URL (Required)</label>
+          <input
+            type="url"
+            value={current.streamUrl ?? ''}
+            onChange={(e) => setCurrent({ ...current, streamUrl: e.target.value })}
+            placeholder="Primary Stream URL (m3u8)"
+            className="form-input"
+            required
+          />
+        </div>
+
+        {/* Secondary Stream URLs */}
+        <div className="space-y-2">
+          <label className="text-sm text-gray-400">Secondary Stream URLs (Optional)</label>
+          
+          <input
+            type="url"
+            value={current.streamUrl2 ?? ''}
+            onChange={(e) => setCurrent({ ...current, streamUrl2: e.target.value })}
+            placeholder="Server 2 Stream URL (m3u8)"
+            className="form-input"
+          />
+          
+          <input
+            type="url"
+            value={current.streamUrl3 ?? ''}
+            onChange={(e) => setCurrent({ ...current, streamUrl3: e.target.value })}
+            placeholder="Server 3 Stream URL (m3u8)"
+            className="form-input"
+          />
+          
+          <input
+            type="url"
+            value={current.streamUrl4 ?? ''}
+            onChange={(e) => setCurrent({ ...current, streamUrl4: e.target.value })}
+            placeholder="Server 4 Stream URL (m3u8)"
+            className="form-input"
+          />
+          
+          <input
+            type="url"
+            value={current.streamUrl5 ?? ''}
+            onChange={(e) => setCurrent({ ...current, streamUrl5: e.target.value })}
+            placeholder="Server 5 Stream URL (m3u8)"
+            className="form-input"
+          />
+        </div>
 
         <div className="space-y-2">
           <label className="text-sm text-gray-400">
@@ -165,6 +241,23 @@ export default function ChannelManager() {
             className="form-input min-h-[80px] font-mono text-xs"
             rows={3}
           />
+        </div>
+
+        <div className="space-y-2">
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={current.isM3UPlaylist || false}
+              onChange={(e) =>
+                setCurrent({ ...current, isM3UPlaylist: e.target.checked })
+              }
+              className="rounded"
+            />
+            <span className="text-sm text-gray-400">M3U Playlist</span>
+          </label>
+          <p className="text-xs text-gray-500">
+            Check this if the stream URL is an M3U playlist file
+          </p>
         </div>
 
         <select
@@ -215,23 +308,31 @@ export default function ChannelManager() {
                   className="w-10 h-10 object-contain"
                 />
                 <div>
-                  <p>{chan.name}</p>
+                  <p className="font-medium">{chan.name}</p>
                   <p className="text-xs text-gray-400">{chan.categoryName}</p>
-                  {chan.authCookie && (
-                    <p className="text-xs text-green-400">🔐 Auth Required</p>
-                  )}
+                  <div className="flex items-center gap-2 text-xs mt-1">
+                    <span className="text-blue-400">
+                      {countStreamUrls(chan)} Server{countStreamUrls(chan) !== 1 ? 's' : ''}
+                    </span>
+                    {chan.authCookie && (
+                      <span className="text-green-400">🔐 Auth</span>
+                    )}
+                    {chan.isM3UPlaylist && (
+                      <span className="text-yellow-200">📋 M3U</span>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex gap-3">
                 <button
                   onClick={() => handleEdit(chan)}
-                  className="text-sm text-blue-400"
+                  className="text-sm text-blue-400 hover:text-blue-300"
                 >
                   Edit
                 </button>
                 <button
                   onClick={() => handleDelete(chan.id)}
-                  className="text-sm text-red-500"
+                  className="text-sm text-red-500 hover:text-red-400"
                 >
                   Delete
                 </button>
