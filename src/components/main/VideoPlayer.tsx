@@ -14,13 +14,16 @@ import {
   CheckIcon
 } from './Icons';
 
-// Extend the existing Screen interface properly
+// Type declaration for Screen Orientation API
+interface ScreenOrientationAPI {
+  lock?: (orientation: string) => Promise<void>;
+  unlock?: () => void;
+}
+
+// Extend the existing Screen interface
 declare global {
   interface Screen {
-    orientation?: ScreenOrientation & {
-      lock?: (orientation: string) => Promise<void>;
-      unlock?: () => void;
-    };
+    orientation?: ScreenOrientation & ScreenOrientationAPI;
   }
 }
 
