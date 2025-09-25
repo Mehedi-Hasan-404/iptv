@@ -24,12 +24,10 @@ export default function ChannelManager() {
     streamUrl: '',
     categoryId: '',
     authCookie: '',
-    isM3UPlaylist: false,
   });
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // fetch categories and channels in real-time
   useEffect(() => {
     const catQuery = query(collection(db, 'categories'), orderBy('name'));
     const unsubCats = onSnapshot(catQuery, (snap) => {
@@ -51,7 +49,6 @@ export default function ChannelManager() {
     };
   }, []);
 
-  // save or update channel
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -64,7 +61,6 @@ export default function ChannelManager() {
         return;
       }
 
-      // Prepare the data object
       const data = {
         name: current.name?.trim() ?? '',
         logoUrl: current.logoUrl?.trim() ?? '',
@@ -72,7 +68,6 @@ export default function ChannelManager() {
         categoryId: current.categoryId ?? '',
         categoryName: category.name,
         authCookie: current.authCookie?.trim() || null,
-        isM3UPlaylist: current.isM3UPlaylist || false,
       };
 
       if (isEditing && current.id) {
@@ -116,13 +111,11 @@ export default function ChannelManager() {
       streamUrl: '',
       categoryId: '',
       authCookie: '',
-      isM3UPlaylist: false,
     });
   };
 
   return (
     <div className="grid md:grid-cols-3 gap-8">
-      {/* Channel Form */}
       <form
         onSubmit={handleSubmit}
         className="md:col-span-1 bg-gray-800 p-6 rounded-lg space-y-4"
@@ -148,49 +141,24 @@ export default function ChannelManager() {
           required
         />
 
-        <div className="space-y-2">
-          <label className="text-sm text-gray-400">Stream URL (M3U8)</label>
-          <input
-            type="url"
-            value={current.streamUrl ?? ''}
-            onChange={(e) => setCurrent({ ...current, streamUrl: e.target.value })}
-            placeholder="https://example.com/stream.m3u8"
-            className="form-input"
-            required
-          />
-        </div>
+        <input
+          type="url"
+          value={current.streamUrl ?? ''}
+          onChange={(e) => setCurrent({ ...current, streamUrl: e.target.value })}
+          placeholder="Stream URL (m3u8)"
+          className="form-input"
+          required
+        />
 
-        <div className="space-y-2">
-          <label className="text-sm text-gray-400">
-            Authentication Cookie (Optional)
-          </label>
-          <textarea
-            value={current.authCookie ?? ''}
-            onChange={(e) =>
-              setCurrent({ ...current, authCookie: e.target.value })
-            }
-            placeholder="Edge-Cache-Cookie=URLPrefix=..."
-            className="form-input min-h-[80px] font-mono text-xs"
-            rows={3}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={current.isM3UPlaylist || false}
-              onChange={(e) =>
-                setCurrent({ ...current, isM3UPlaylist: e.target.checked })
-              }
-              className="rounded"
-            />
-            <span className="text-sm text-gray-400">M3U Playlist</span>
-          </label>
-          <p className="text-xs text-gray-500">
-            Check this if the stream URL is an M3U playlist file
-          </p>
-        </div>
+        <textarea
+          value={current.authCookie ?? ''}
+          onChange={(e) =>
+            setCurrent({ ...current, authCookie: e.target.value })
+          }
+          placeholder="Authentication Cookie (Optional)"
+          className="form-input min-h-[60px] font-mono text-xs"
+          rows={2}
+        />
 
         <select
           value={current.categoryId ?? ''}
@@ -222,7 +190,6 @@ export default function ChannelManager() {
         </div>
       </form>
 
-      {/* Channel List */}
       <div className="md:col-span-2 bg-gray-800 p-6 rounded-lg">
         <h3 className="text-xl font-semibold mb-4">
           Existing Channels ({channels.length})
@@ -242,14 +209,6 @@ export default function ChannelManager() {
                 <div>
                   <p className="font-medium">{chan.name}</p>
                   <p className="text-xs text-gray-400">{chan.categoryName}</p>
-                  <div className="flex items-center gap-2 text-xs mt-1">
-                    {chan.authCookie && (
-                      <span className="text-green-400">🔐 Auth</span>
-                    )}
-                    {chan.isM3UPlaylist && (
-                      <span className="text-yellow-200">📋 M3U</span>
-                    )}
-                  </div>
                 </div>
               </div>
               <div className="flex gap-3">
