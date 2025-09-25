@@ -1,3 +1,4 @@
+// /src/app/(main)/[channelId]/page.tsx
 import { doc, getDoc, collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { notFound } from 'next/navigation';
@@ -83,10 +84,6 @@ export default async function ChannelPage({ params }: ChannelPageProps) {
       <div className="sticky-player-container !static md:!sticky">
         <VideoPlayer 
           streamUrl={channelData.streamUrl} 
-          streamUrl2={channelData.streamUrl2}
-          streamUrl3={channelData.streamUrl3}
-          streamUrl4={channelData.streamUrl4}
-          streamUrl5={channelData.streamUrl5}
           channelName={channelData.name}
           authCookie={channelData.authCookie}
           isM3UPlaylist={channelData.isM3UPlaylist}
