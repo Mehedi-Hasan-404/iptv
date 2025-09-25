@@ -1,3 +1,4 @@
+// /src/types/index.ts
 // Shared type for public data
 export interface Category {
   id: string;
@@ -17,11 +18,7 @@ export interface PublicChannel {
 
 // Type for full channel data (only for admin panel)
 export interface AdminChannel extends PublicChannel {
-  streamUrl: string; // Primary M3U link
-  streamUrl2?: string; // Secondary M3U link
-  streamUrl3?: string; // Third M3U link
-  streamUrl4?: string; // Fourth M3U link
-  streamUrl5?: string; // Fifth M3U link
+  streamUrl: string; // M3U8 stream URL
   authCookie?: string; // Optional authentication cookie
   isM3UPlaylist?: boolean; // Flag to indicate if this is an M3U playlist
 }
