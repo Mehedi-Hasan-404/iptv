@@ -7,10 +7,9 @@ import { useSettings } from '@/contexts/SettingsContext';
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  onSettingsClick: () => void;
 }
 
-const Sidebar = ({ isOpen, onClose, onSettingsClick }: SidebarProps) => {
+const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const { theme, setTheme } = useSettings();
 
   const toggleTheme = () => {
@@ -29,18 +28,8 @@ const Sidebar = ({ isOpen, onClose, onSettingsClick }: SidebarProps) => {
     >
       <span className="closebtn" style={{ left: '20px', right: 'auto' }} onClick={onClose}>×</span>
       
-      <Link href="/" onClick={onClose}>
-        <HomeIcon />
-        <span>Home</span>
-      </Link>
-      
-      <Link href="/favorites" onClick={onClose}>
-        <Star />
-        <span>Favorites</span>
-      </Link>
-      
-      {/* Theme Toggle with Animation */}
-      <a href="#" onClick={(e) => { e.preventDefault(); toggleTheme(); }}>
+      {/* Theme Toggle at the top */}
+      <a href="#" onClick={(e) => { e.preventDefault(); toggleTheme(); }} className="theme-toggle-link">
         <div className="theme-toggle-icon">
           {theme === 'dark' ? (
             <Sun className="theme-icon sun-icon" />
@@ -50,6 +39,18 @@ const Sidebar = ({ isOpen, onClose, onSettingsClick }: SidebarProps) => {
         </div>
         <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
       </a>
+      
+      <div className="sidebar-divider"></div>
+      
+      <Link href="/" onClick={onClose}>
+        <HomeIcon />
+        <span>Home</span>
+      </Link>
+      
+      <Link href="/favorites" onClick={onClose}>
+        <Star />
+        <span>Favorites</span>
+      </Link>
     </div>
   );
 };
