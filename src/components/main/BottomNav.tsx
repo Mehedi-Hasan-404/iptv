@@ -1,19 +1,11 @@
+// /src/components/main/BottomNav.tsx
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { HomeIcon, SettingsIcon } from './Icons';
+import { HomeIcon, Star } from 'lucide-react';
 
-interface BottomNavProps {
-  onSettingsClick: () => void;
-}
-
-const BottomNav = ({ onSettingsClick }: BottomNavProps) => {
+const BottomNav = () => {
   const pathname = usePathname();
-  
-  const handleSettingsClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    e.preventDefault();
-    onSettingsClick();
-  };
   
   return (
     <nav className="bottom-nav">
@@ -21,10 +13,10 @@ const BottomNav = ({ onSettingsClick }: BottomNavProps) => {
         <HomeIcon className="nav-icon" />
         <span>Home</span>
       </Link>
-      <a href="#" className="nav-item" onClick={handleSettingsClick}>
-        <SettingsIcon className="nav-icon" />
-        <span>Settings</span>
-      </a>
+      <Link href="/favorites" className={`nav-item ${pathname === '/favorites' ? 'active' : ''}`}>
+        <Star className="nav-icon" />
+        <span>Favorites</span>
+      </Link>
     </nav>
   );
 };
