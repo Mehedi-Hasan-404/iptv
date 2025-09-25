@@ -1,8 +1,9 @@
+// /src/contexts/SettingsContext.tsx
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-type Theme = 'dark' | 'light' | 'blue' | 'green';
+type Theme = 'dark' | 'light';
 
 interface SettingsContextType {
   theme: Theme;
@@ -17,7 +18,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     // This effect runs only on the client
     const savedTheme = localStorage.getItem('theme') as Theme | null;
-    if (savedTheme) {
+    if (savedTheme && (savedTheme === 'dark' || savedTheme === 'light')) {
       setThemeState(savedTheme);
     }
   }, []);
@@ -25,10 +26,17 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     // Apply theme class to body whenever theme changes
     const body = document.body;
+    body.classList.add('changing-theme');
     body.classList.remove('light-theme', 'blue-theme', 'green-theme');
-    if (theme !== 'dark') {
-      body.classList.add(`${theme}-theme`);
+    
+    if (theme === 'light') {
+      body.classList.add('light-theme');
     }
+    
+    // Remove transition class after animation
+    setTimeout(() => {
+      body.classList.remove('changing-theme');
+    }, 300);
   }, [theme]);
 
   const setTheme = (newTheme: Theme) => {
