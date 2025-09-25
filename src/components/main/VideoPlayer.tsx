@@ -16,9 +16,11 @@ import {
 
 // Extend the existing Screen interface properly
 declare global {
-  interface ScreenOrientation {
-    lock: (orientation: string) => Promise<void>;
-    unlock: () => void;
+  interface Screen {
+    orientation?: ScreenOrientation & {
+      lock?: (orientation: string) => Promise<void>;
+      unlock?: () => void;
+    };
   }
 }
 
@@ -60,7 +62,7 @@ const VideoPlayer = ({
   const [pip, setPip] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showControls, setShowControls] = useState(false);
+  const [showControls, setShowControls] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -72,6 +74,7 @@ const VideoPlayer = ({
   const [currentQuality, setCurrentQuality] = useState(-1);
   const [currentServer, setCurrentServer] = useState(1);
   const [isLive, setIsLive] = useState(true);
+  const [useProxy, setUseProxy] = useState(false);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const progressRef = useRef<HTMLDivElement>(null);
 
@@ -88,49 +91,64 @@ const VideoPlayer = ({
 
   // Controls visibility logic
   useEffect(() => {
-    if (!playing || error || showSettings) {
-      setShowControls(true);
-      return;
-    }
+    const playerElement = playerWrapperRef.current;
+    if (!playerElement) return;
 
     const hideControls = () => {
-      if (videoRef.current && !videoRef.current.paused && !showSettings) {
+      if (videoRef.current && !videoRef.current.paused) {
         setShowControls(false);
+        setShowSettings(false);
+        setShowQuality(false);
+        setShowServers(false);
       }
     };
 
-    const showAndResetTimeout = () => {
+    const showControlsTemporarily = () => {
       setShowControls(true);
       if (controlsTimeoutRef.current) {
         clearTimeout(controlsTimeoutRef.current);
       }
-      if (!showSettings) {
-        controlsTimeoutRef.current = setTimeout(hideControls, 3000);
+      controlsTimeoutRef.current = setTimeout(hideControls, 3000);
+    };
+
+    const handlePlayerClick = () => {
+      if (showControls) {
+        hideControls();
+      } else {
+        showControlsTemporarily();
       }
     };
 
+    const handleMouseMove = () => {
+      showControlsTemporarily();
+    };
+
+    const handleMouseLeave = () => {
+      if (videoRef.current && !videoRef.current.paused) {
+        setTimeout(hideControls, 1000);
+      }
+    };
+
+    // Initial timeout to hide controls
     controlsTimeoutRef.current = setTimeout(hideControls, 3000);
 
-    const playerElement = playerWrapperRef.current;
-    if (playerElement) {
-      playerElement.addEventListener('mousemove', showAndResetTimeout);
-      playerElement.addEventListener('mouseenter', showAndResetTimeout);
-      playerElement.addEventListener('mouseleave', hideControls);
-      playerElement.addEventListener('touchstart', showAndResetTimeout);
-    }
-    
+    playerElement.addEventListener('click', handlePlayerClick);
+    playerElement.addEventListener('mousemove', handleMouseMove);
+    playerElement.addEventListener('mouseenter', handleMouseMove);
+    playerElement.addEventListener('mouseleave', handleMouseLeave);
+    playerElement.addEventListener('touchstart', handleMouseMove);
+
     return () => {
       if (controlsTimeoutRef.current) {
         clearTimeout(controlsTimeoutRef.current);
       }
-      if (playerElement) {
-        playerElement.removeEventListener('mousemove', showAndResetTimeout);
-        playerElement.removeEventListener('mouseenter', showAndResetTimeout);
-        playerElement.removeEventListener('mouseleave', hideControls);
-        playerElement.removeEventListener('touchstart', showAndResetTimeout);
-      }
+      playerElement.removeEventListener('click', handlePlayerClick);
+      playerElement.removeEventListener('mousemove', handleMouseMove);
+      playerElement.removeEventListener('mouseenter', handleMouseMove);
+      playerElement.removeEventListener('mouseleave', handleMouseLeave);
+      playerElement.removeEventListener('touchstart', handleMouseMove);
     };
-  }, [playing, error, showSettings]);
+  }, [showControls]);
 
   // Update time and buffer
   useEffect(() => {
@@ -174,17 +192,18 @@ const VideoPlayer = ({
     const videoElement = videoRef.current;
     const currentStreamUrl = servers[currentServer - 1].url;
     
-    // Build the proxied URL with optional cookie
-    let proxiedUrl = `/api/proxy?url=${encodeURIComponent(currentStreamUrl)}`;
+    // Build proxy URL
+    let proxyUrl = `/api/proxy?url=${encodeURIComponent(currentStreamUrl)}`;
     if (authCookie) {
-      proxiedUrl += `&cookie=${encodeURIComponent(authCookie)}`;
+      proxyUrl += `&cookie=${encodeURIComponent(authCookie)}`;
     }
 
-    console.log('Initializing player with URL:', proxiedUrl);
+    console.log('Initializing player with URL:', currentStreamUrl);
     console.log('Current server:', currentServer);
 
     setError(null);
     setIsLoading(true);
+    setUseProxy(false);
 
     // Clean up previous instance
     if (hlsRef.current) {
@@ -196,118 +215,249 @@ const VideoPlayer = ({
     videoElement.load();
     setPlaying(false);
 
-    // Check if this is an HLS stream or M3U playlist
-    if (isHLSStream(currentStreamUrl) || isM3UPlaylist) {
-      if (Hls.isSupported()) {
-        const hls = new Hls({
-          debug: false,
-          enableWorker: true,
-          lowLatencyMode: false,
-          backBufferLength: 90,
-          maxBufferLength: 30,
-          maxMaxBufferLength: 600,
-          maxBufferSize: 60 * 1000 * 1000,
-          maxBufferHole: 0.5,
-          highBufferWatchdogPeriod: 2,
-          nudgeOffset: 0.1,
-          nudgeMaxRetry: 3,
-          maxFragLookUpTolerance: 0.25,
-          liveSyncDurationCount: 3,
-          liveMaxLatencyDurationCount: Infinity,
-          liveDurationInfinity: true,
-          preferManagedMediaSource: true,
-          xhrSetup: function(xhr: XMLHttpRequest) {
-            xhr.withCredentials = false;
-          }
-        });
-
-        hlsRef.current = hls;
-        hls.loadSource(proxiedUrl);
-        hls.attachMedia(videoElement);
-
-        hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
-          console.log('Manifest parsed successfully');
-          setIsLoading(false);
-          
-          // Get quality levels
-          const levels = hls.levels.map((level, index) => ({
-            height: level.height,
-            level: index,
-            bitrate: level.bitrate
-          }));
-          setQualityLevels(levels);
-          setCurrentQuality(hls.currentLevel);
-          
-          // Check if it's a live stream
-          setIsLive(data.levels[0]?.details?.live || true);
-          
-          videoElement.play().catch(e => {
-            console.warn('Autoplay prevented:', e);
-            if (e.name === "NotAllowedError") {
-              setPlaying(false);
+    // Try direct playback first for ALL streams
+    const tryDirectPlayback = () => {
+      console.log('Trying direct playback...');
+      
+      if (isHLSStream(currentStreamUrl) || isM3UPlaylist) {
+        if (Hls.isSupported()) {
+          const hls = new Hls({
+            debug: false,
+            enableWorker: true,
+            lowLatencyMode: false,
+            backBufferLength: 90,
+            maxBufferLength: 30,
+            maxMaxBufferLength: 600,
+            maxBufferSize: 60 * 1000 * 1000,
+            maxBufferHole: 0.5,
+            highBufferWatchdogPeriod: 2,
+            nudgeOffset: 0.1,
+            nudgeMaxRetry: 3,
+            maxFragLookUpTolerance: 0.25,
+            liveSyncDurationCount: 3,
+            liveMaxLatencyDurationCount: Infinity,
+            liveDurationInfinity: true,
+            preferManagedMediaSource: true,
+            xhrSetup: function(xhr: XMLHttpRequest) {
+              xhr.withCredentials = false;
             }
           });
-        });
 
-        hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
-          console.log('Quality level switched to:', data.level);
-          setCurrentQuality(data.level);
-        });
-
-        hls.on(Hls.Events.ERROR, (event, data) => {
-          console.error('HLS Error:', data);
+          hlsRef.current = hls;
           
-          if (data.fatal) {
-            switch (data.type) {
-              case Hls.ErrorTypes.NETWORK_ERROR:
-                if (retryCount < 3) {
-                  setTimeout(() => {
-                    console.log('Attempting to recover from network error...');
-                    hls.startLoad();
-                    setRetryCount(prev => prev + 1);
-                  }, 2000);
-                } else if (currentServer < servers.length) {
-                  // Try next server
-                  console.log('Trying next server...');
-                  setCurrentServer(prev => prev + 1);
-                  setRetryCount(0);
-                } else {
-                  setError('Network error: Unable to load the stream from any server.');
-                  setIsLoading(false);
+          // Handle errors and fallback to proxy
+          hls.on(Hls.Events.ERROR, (event, data) => {
+            console.error('HLS Error:', data);
+            
+            // If it's a network error, try proxy
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !useProxy) {
+              console.log('Network error with direct playback, trying proxy...');
+              setUseProxy(true);
+              hls.destroy();
+              
+              // Retry with proxy
+              const proxyHls = new Hls({
+                debug: false,
+                enableWorker: true,
+                lowLatencyMode: false,
+                backBufferLength: 90,
+                maxBufferLength: 30,
+                maxMaxBufferLength: 600,
+                maxBufferSize: 60 * 1000 * 1000,
+                maxBufferHole: 0.5,
+                highBufferWatchdogPeriod: 2,
+                nudgeOffset: 0.1,
+                nudgeMaxRetry: 3,
+                maxFragLookUpTolerance: 0.25,
+                liveSyncDurationCount: 3,
+                liveMaxLatencyDurationCount: Infinity,
+                liveDurationInfinity: true,
+                preferManagedMediaSource: true,
+                xhrSetup: function(xhr: XMLHttpRequest) {
+                  xhr.withCredentials = false;
                 }
-                break;
-                
-              case Hls.ErrorTypes.MEDIA_ERROR:
-                console.error('Fatal media error encountered, details:', data.details);
-                hls.recoverMediaError();
-                break;
-                
-              default:
-                setError(`Stream error: ${data.details || 'Unknown error'}`);
+              });
+              
+              hlsRef.current = proxyHls;
+              proxyHls.loadSource(proxyUrl);
+              proxyHls.attachMedia(videoElement);
+              
+              proxyHls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+                console.log('Manifest parsed successfully via proxy');
                 setIsLoading(false);
-                hls.destroy();
-                break;
+                
+                // Get quality levels
+                const levels = proxyHls.levels.map((level, index) => ({
+                  height: level.height,
+                  level: index,
+                  bitrate: level.bitrate
+                }));
+                setQualityLevels(levels);
+                setCurrentQuality(proxyHls.currentLevel);
+                
+                // Check if it's a live stream
+                setIsLive(data.levels[0]?.details?.live || true);
+                
+                videoElement.play().catch(e => {
+                  console.warn('Autoplay prevented:', e);
+                  if (e.name === "NotAllowedError") {
+                    setPlaying(false);
+                  }
+                });
+              });
+              
+              proxyHls.on(Hls.Events.ERROR, (event, data) => {
+                console.error('HLS Error with proxy:', data);
+                if (data.fatal) {
+                  handleError();
+                }
+              });
+              
+              return;
             }
-          }
-        });
+            
+            if (data.fatal) {
+              handleError();
+            }
+          });
 
-        hls.on(Hls.Events.LEVEL_LOADED, () => {
-          setIsLoading(false);
-          setRetryCount(0);
-        });
+          hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+            console.log('Manifest parsed successfully via direct playback');
+            setIsLoading(false);
+            
+            // Get quality levels
+            const levels = hls.levels.map((level, index) => ({
+              height: level.height,
+              level: index,
+              bitrate: level.bitrate
+            }));
+            setQualityLevels(levels);
+            setCurrentQuality(hls.currentLevel);
+            
+            // Check if it's a live stream
+            setIsLive(data.levels[0]?.details?.live || true);
+            
+            videoElement.play().catch(e => {
+              console.warn('Autoplay prevented:', e);
+              if (e.name === "NotAllowedError") {
+                setPlaying(false);
+              }
+            });
+          });
 
-      } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
-        // Native HLS support (Safari)
-        console.log('Using native HLS support');
-        videoElement.src = proxiedUrl;
+          hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+            console.log('Quality level switched to:', data.level);
+            setCurrentQuality(data.level);
+          });
+
+          hls.loadSource(currentStreamUrl);
+          hls.attachMedia(videoElement);
+
+        } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+          // Native HLS support (Safari) - try direct first
+          console.log('Using native HLS support (direct)');
+          videoElement.src = currentStreamUrl;
+        }
+      } else {
+        // Direct stream - try direct first
+        console.log('Using direct video playback');
+        videoElement.src = currentStreamUrl;
       }
-    } else {
-      // Direct stream
-      console.log('Using direct video playback');
-      videoElement.src = proxiedUrl;
-    }
+    };
 
-    // Common video element event listeners
+    // Handle errors and fallback to proxy
+    const handleError = () => {
+      if (!useProxy) {
+        console.log('Direct playback failed, trying proxy...');
+        setUseProxy(true);
+        
+        if (isHLSStream(currentStreamUrl) || isM3UPlaylist) {
+          if (Hls.isSupported()) {
+            const hls = new Hls({
+              debug: false,
+              enableWorker: true,
+              lowLatencyMode: false,
+              backBufferLength: 90,
+              maxBufferLength: 30,
+              maxMaxBufferLength: 600,
+              maxBufferSize: 60 * 1000 * 1000,
+              maxBufferHole: 0.5,
+              highBufferWatchdogPeriod: 2,
+              nudgeOffset: 0.1,
+              nudgeMaxRetry: 3,
+              maxFragLookUpTolerance: 0.25,
+              liveSyncDurationCount: 3,
+              liveMaxLatencyDurationCount: Infinity,
+              liveDurationInfinity: true,
+              preferManagedMediaSource: true,
+              xhrSetup: function(xhr: XMLHttpRequest) {
+                xhr.withCredentials = false;
+              }
+            });
+
+            hlsRef.current = hls;
+            hls.loadSource(proxyUrl);
+            hls.attachMedia(videoElement);
+
+            hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+              console.log('Manifest parsed successfully via proxy');
+              setIsLoading(false);
+              
+              // Get quality levels
+              const levels = hls.levels.map((level, index) => ({
+                height: level.height,
+                level: index,
+                bitrate: level.bitrate
+              }));
+              setQualityLevels(levels);
+              setCurrentQuality(hls.currentLevel);
+              
+              // Check if it's a live stream
+              setIsLive(data.levels[0]?.details?.live || true);
+              
+              videoElement.play().catch(e => {
+                console.warn('Autoplay prevented:', e);
+                if (e.name === "NotAllowedError") {
+                  setPlaying(false);
+                }
+              });
+            });
+
+            hls.on(Hls.Events.ERROR, (event, data) => {
+              console.error('HLS Error with proxy:', data);
+              if (data.fatal) {
+                finalHandleError();
+              }
+            });
+
+          } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+            // Native HLS support (Safari) via proxy
+            console.log('Using native HLS support via proxy');
+            videoElement.src = proxyUrl;
+          }
+        } else {
+          // Direct stream via proxy
+          console.log('Using direct video playback via proxy');
+          videoElement.src = proxyUrl;
+        }
+      } else {
+        finalHandleError();
+      }
+    };
+
+    const finalHandleError = () => {
+      console.error('Video error');
+      if (currentServer < servers.length && retryCount < 1) {
+        console.log('Trying next server...');
+        setCurrentServer(prev => prev + 1);
+        setRetryCount(0);
+        setUseProxy(false);
+      } else {
+        setError('Unable to play this stream from any server.');
+        setIsLoading(false);
+      }
+    };
+
     const handleLoadedMetadata = () => {
       console.log('Video metadata loaded');
       setIsLoading(false);
@@ -319,24 +469,16 @@ const VideoPlayer = ({
       });
     };
 
-    const handleError = () => {
-      console.error('Video error');
-      if (currentServer < servers.length && retryCount < 1) {
-        console.log('Trying next server...');
-        setCurrentServer(prev => prev + 1);
-        setRetryCount(0);
-      } else {
-        setError('Unable to play this stream from any server.');
-        setIsLoading(false);
-      }
-    };
-
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onWaiting = () => setIsLoading(true);
     const onPlaying = () => setIsLoading(false);
     const onCanPlay = () => setIsLoading(false);
 
+    // Start with direct playback
+    tryDirectPlayback();
+
+    // Add event listeners
     videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
     videoElement.addEventListener('error', handleError);
     videoElement.addEventListener('play', onPlay);
@@ -358,7 +500,7 @@ const VideoPlayer = ({
       videoElement.removeEventListener('playing', onPlaying);
       videoElement.removeEventListener('canplay', onCanPlay);
     };
-  }, [servers, currentServer, authCookie, isClient, retryCount, isM3UPlaylist]);
+  }, [servers, currentServer, authCookie, isClient, retryCount, isM3UPlaylist, useProxy]);
 
   useEffect(() => {
     const cleanup = initializePlayer();
@@ -373,6 +515,7 @@ const VideoPlayer = ({
   const handleRetry = () => {
     setRetryCount(0);
     setCurrentServer(1);
+    setUseProxy(false);
     initializePlayer();
   };
 
@@ -471,6 +614,19 @@ const VideoPlayer = ({
     setRetryCount(0);
     setShowServers(false);
     setShowSettings(false);
+    setUseProxy(false);
+  };
+
+  const toggleSettings = () => {
+    if (showSettings) {
+      setShowSettings(false);
+      setShowQuality(false);
+      setShowServers(false);
+    } else {
+      setShowSettings(true);
+      setShowQuality(false);
+      setShowServers(false);
+    }
   };
 
   const formatTime = (seconds: number): string => {
@@ -556,19 +712,24 @@ const VideoPlayer = ({
           <div className="player-loading-indicator show">
             <div className="loading-spinner"></div>
             <div className="loading-text">
-              Loading from {servers[currentServer - 1]?.label || 'Server'}...
+              {useProxy ? 'Loading via proxy from' : 'Loading from'} {servers[currentServer - 1]?.label || 'Server'}...
             </div>
           </div>
         )}
 
+        {/* Center play button - always visible when paused */}
+        <div className="center-controls">
+          <button 
+            className="center-play-btn" 
+            onClick={handlePlayPause}
+            style={{ opacity: playing ? 0 : 1, pointerEvents: playing ? 'none' : 'auto' }}
+          >
+            {playing ? <PauseIcon /> : <PlayIcon />}
+          </button>
+        </div>
+        
         {!error && (
           <>
-            <div className="center-controls">
-              <button className="center-play-btn" onClick={handlePlayPause}>
-                {playing ? <PauseIcon /> : <PlayIcon />}
-              </button>
-            </div>
-            
             <div className="top-controls">
               <div className="player-title">{channelName}</div>
               {isLive && <div className="live-indicator">LIVE</div>}
@@ -609,97 +770,95 @@ const VideoPlayer = ({
                 </div>
                 
                 <div className="controls-right">
-                  {/* Settings button */}
-                  <div className="relative">
-                    <button 
-                      className={`control-button ${showSettings ? 'active' : ''}`}
-                      onClick={() => {
-                        setShowSettings(!showSettings);
-                        setShowQuality(false);
-                        setShowServers(false);
-                      }}
-                    >
-                      <SettingsIcon />
-                    </button>
-                    
-                    {/* Settings menu */}
-                    {showSettings && (
-                      <div className="quality-menu" style={{ display: 'block' }}>
-                        <div className="quality-menu-header">Settings</div>
-                        
-                        {/* Quality option */}
-                        {qualityLevels.length > 0 && (
-                          <div 
-                            className="quality-option"
-                            onClick={() => {
-                              setShowQuality(!showQuality);
-                              setShowServers(false);
-                            }}
-                          >
-                            <span>Quality</span>
-                            <span className="text-xs">
-                              {currentQuality === -1 ? 'Auto' : getQualityLabel(qualityLevels[currentQuality])}
-                            </span>
-                          </div>
-                        )}
-                        
-                        {/* Server option */}
-                        {servers.length > 1 && (
-                          <div 
-                            className="quality-option"
-                            onClick={() => {
-                              setShowServers(!showServers);
-                              setShowQuality(false);
-                            }}
-                          >
-                            <span>Server</span>
-                            <span className="text-xs">{servers[currentServer - 1]?.label}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
-                    {/* Quality submenu */}
-                    {showQuality && (
-                      <div className="quality-menu" style={{ display: 'block', right: '120px' }}>
-                        <div className="quality-menu-header">Quality</div>
-                        <div 
-                          className={`quality-option ${currentQuality === -1 ? 'active' : ''}`}
-                          onClick={() => handleQualityChange(-1)}
-                        >
-                          <span>Auto</span>
-                          {currentQuality === -1 && <CheckIcon size={16} />}
+                  {/* Settings button - only show when quality levels are available or multiple servers */}
+                  {(qualityLevels.length > 0 || servers.length > 1) && (
+                    <div className="relative">
+                      <button 
+                        className={`control-button ${showSettings ? 'active' : ''}`}
+                        onClick={toggleSettings}
+                      >
+                        <SettingsIcon />
+                      </button>
+                      
+                      {/* Settings menu */}
+                      {showSettings && (
+                        <div className="quality-menu" style={{ display: 'block' }}>
+                          <div className="quality-menu-header">Settings</div>
+                          
+                          {/* Quality option */}
+                          {qualityLevels.length > 0 && (
+                            <div 
+                              className="quality-option"
+                              onClick={() => {
+                                setShowQuality(!showQuality);
+                                setShowServers(false);
+                              }}
+                            >
+                              <span>Quality</span>
+                              <span className="text-xs">
+                                {currentQuality === -1 ? 'Auto' : getQualityLabel(qualityLevels[currentQuality])}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {/* Server option */}
+                          {servers.length > 1 && (
+                            <div 
+                              className="quality-option"
+                              onClick={() => {
+                                setShowServers(!showServers);
+                                setShowQuality(false);
+                              }}
+                            >
+                              <span>Server</span>
+                              <span className="text-xs">{servers[currentServer - 1]?.label}</span>
+                            </div>
+                          )}
                         </div>
-                        {qualityLevels.map((level) => (
+                      )}
+                      
+                      {/* Quality submenu */}
+                      {showQuality && (
+                        <div className="quality-menu" style={{ display: 'block', right: '120px' }}>
+                          <div className="quality-menu-header">Quality</div>
                           <div 
-                            key={level.level}
-                            className={`quality-option ${currentQuality === level.level ? 'active' : ''}`}
-                            onClick={() => handleQualityChange(level.level)}
+                            className={`quality-option ${currentQuality === -1 ? 'active' : ''}`}
+                            onClick={() => handleQualityChange(-1)}
                           >
-                            <span>{getQualityLabel(level)}</span>
-                            {currentQuality === level.level && <CheckIcon size={16} />}
+                            <span>Auto</span>
+                            {currentQuality === -1 && <CheckIcon size={16} />}
                           </div>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {/* Server submenu */}
-                    {showServers && (
-                      <div className="quality-menu" style={{ display: 'block', right: '120px' }}>
-                        <div className="quality-menu-header">Select Server</div>
-                        {servers.map((server, index) => (
-                          <div 
-                            key={index}
-                            className={`quality-option ${currentServer === index + 1 ? 'active' : ''}`}
-                            onClick={() => handleServerChange(index + 1)}
-                          >
-                            <span>{server.label}</span>
-                            {currentServer === index + 1 && <CheckIcon size={16} />}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                          {qualityLevels.map((level) => (
+                            <div 
+                              key={level.level}
+                              className={`quality-option ${currentQuality === level.level ? 'active' : ''}`}
+                              onClick={() => handleQualityChange(level.level)}
+                            >
+                              <span>{getQualityLabel(level)}</span>
+                              {currentQuality === level.level && <CheckIcon size={16} />}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* Server submenu */}
+                      {showServers && (
+                        <div className="quality-menu" style={{ display: 'block', right: '120px' }}>
+                          <div className="quality-menu-header">Select Server</div>
+                          {servers.map((server, index) => (
+                            <div 
+                              key={index}
+                              className={`quality-option ${currentServer === index + 1 ? 'active' : ''}`}
+                              onClick={() => handleServerChange(index + 1)}
+                            >
+                              <span>{server.label}</span>
+                              {currentServer === index + 1 && <CheckIcon size={16} />}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   
                   {/* PiP button */}
                   {document.pictureInPictureEnabled && (
