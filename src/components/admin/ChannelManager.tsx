@@ -1,3 +1,4 @@
+// /src/components/admin/ChannelManager.tsx
 'use client';
 
 import { useState, useEffect, FormEvent } from 'react';
@@ -21,10 +22,6 @@ export default function ChannelManager() {
     name: '',
     logoUrl: '',
     streamUrl: '',
-    streamUrl2: '',
-    streamUrl3: '',
-    streamUrl4: '',
-    streamUrl5: '',
     categoryId: '',
     authCookie: '',
     isM3UPlaylist: false,
@@ -67,8 +64,8 @@ export default function ChannelManager() {
         return;
       }
 
-      // Prepare the data object with all optional stream URLs
-      const data: any = {
+      // Prepare the data object
+      const data = {
         name: current.name?.trim() ?? '',
         logoUrl: current.logoUrl?.trim() ?? '',
         streamUrl: current.streamUrl?.trim() ?? '',
@@ -77,20 +74,6 @@ export default function ChannelManager() {
         authCookie: current.authCookie?.trim() || null,
         isM3UPlaylist: current.isM3UPlaylist || false,
       };
-
-      // Add optional stream URLs only if they have values
-      if (current.streamUrl2?.trim()) {
-        data.streamUrl2 = current.streamUrl2.trim();
-      }
-      if (current.streamUrl3?.trim()) {
-        data.streamUrl3 = current.streamUrl3.trim();
-      }
-      if (current.streamUrl4?.trim()) {
-        data.streamUrl4 = current.streamUrl4.trim();
-      }
-      if (current.streamUrl5?.trim()) {
-        data.streamUrl5 = current.streamUrl5.trim();
-      }
 
       if (isEditing && current.id) {
         await updateDoc(doc(db, 'channels', current.id), data);
@@ -131,23 +114,10 @@ export default function ChannelManager() {
       name: '',
       logoUrl: '',
       streamUrl: '',
-      streamUrl2: '',
-      streamUrl3: '',
-      streamUrl4: '',
-      streamUrl5: '',
       categoryId: '',
       authCookie: '',
       isM3UPlaylist: false,
     });
-  };
-
-  const countStreamUrls = (channel: AdminChannel): number => {
-    let count = channel.streamUrl ? 1 : 0;
-    if (channel.streamUrl2) count++;
-    if (channel.streamUrl3) count++;
-    if (channel.streamUrl4) count++;
-    if (channel.streamUrl5) count++;
-    return count;
   };
 
   return (
@@ -178,53 +148,15 @@ export default function ChannelManager() {
           required
         />
 
-        {/* Primary Stream URL */}
         <div className="space-y-2">
-          <label className="text-sm text-gray-400">Primary Stream URL (Required)</label>
+          <label className="text-sm text-gray-400">Stream URL (M3U8)</label>
           <input
             type="url"
             value={current.streamUrl ?? ''}
             onChange={(e) => setCurrent({ ...current, streamUrl: e.target.value })}
-            placeholder="Primary Stream URL (m3u8)"
+            placeholder="https://example.com/stream.m3u8"
             className="form-input"
             required
-          />
-        </div>
-
-        {/* Secondary Stream URLs */}
-        <div className="space-y-2">
-          <label className="text-sm text-gray-400">Secondary Stream URLs (Optional)</label>
-          
-          <input
-            type="url"
-            value={current.streamUrl2 ?? ''}
-            onChange={(e) => setCurrent({ ...current, streamUrl2: e.target.value })}
-            placeholder="Server 2 Stream URL (m3u8)"
-            className="form-input"
-          />
-          
-          <input
-            type="url"
-            value={current.streamUrl3 ?? ''}
-            onChange={(e) => setCurrent({ ...current, streamUrl3: e.target.value })}
-            placeholder="Server 3 Stream URL (m3u8)"
-            className="form-input"
-          />
-          
-          <input
-            type="url"
-            value={current.streamUrl4 ?? ''}
-            onChange={(e) => setCurrent({ ...current, streamUrl4: e.target.value })}
-            placeholder="Server 4 Stream URL (m3u8)"
-            className="form-input"
-          />
-          
-          <input
-            type="url"
-            value={current.streamUrl5 ?? ''}
-            onChange={(e) => setCurrent({ ...current, streamUrl5: e.target.value })}
-            placeholder="Server 5 Stream URL (m3u8)"
-            className="form-input"
           />
         </div>
 
@@ -311,9 +243,6 @@ export default function ChannelManager() {
                   <p className="font-medium">{chan.name}</p>
                   <p className="text-xs text-gray-400">{chan.categoryName}</p>
                   <div className="flex items-center gap-2 text-xs mt-1">
-                    <span className="text-blue-400">
-                      {countStreamUrls(chan)} Server{countStreamUrls(chan) !== 1 ? 's' : ''}
-                    </span>
                     {chan.authCookie && (
                       <span className="text-green-400">🔐 Auth</span>
                     )}
