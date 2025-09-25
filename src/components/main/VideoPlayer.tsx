@@ -49,7 +49,6 @@ const VideoPlayer = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [buffered, setBuffered] = useState(0);
-  const [showSettings, setShowSettings] = useState(false);
   const [showQuality, setShowQuality] = useState(false);
   const [qualityLevels, setQualityLevels] = useState<QualityLevel[]>([]);
   const [currentQuality, setCurrentQuality] = useState(-1);
@@ -65,7 +64,7 @@ const VideoPlayer = ({
     if (!playerElement) return;
 
     const hideControls = () => {
-      if (!showSettings && !showQuality) {
+      if (!showQuality) {
         setShowControls(false);
       }
     };
@@ -75,7 +74,7 @@ const VideoPlayer = ({
       if (controlsTimeoutRef.current) {
         clearTimeout(controlsTimeoutRef.current);
       }
-      if (!showSettings && !showQuality) {
+      if (!showQuality) {
         controlsTimeoutRef.current = setTimeout(hideControls, 3000);
       }
     };
@@ -85,7 +84,7 @@ const VideoPlayer = ({
     };
 
     const handleMouseLeave = () => {
-      if (!showSettings && !showQuality) {
+      if (!showQuality) {
         hideControls();
       }
     };
@@ -107,7 +106,7 @@ const VideoPlayer = ({
       playerElement.removeEventListener('mouseleave', handleMouseLeave);
       playerElement.removeEventListener('touchstart', handleMouseMove);
     };
-  }, [showControls, showSettings, showQuality]);
+  }, [showControls, showQuality]);
 
   // Update time and buffer
   useEffect(() => {
@@ -335,7 +334,7 @@ const VideoPlayer = ({
     
     try {
       if (!document.fullscreenElement) {
-        await playerWrapperRef.current.requestFullscreen();
+                await playerWrapperRef.current.requestFullscreen();
         try {
           // @ts-ignore
           if (screen.orientation && typeof screen.orientation.lock === 'function') {
@@ -395,14 +394,12 @@ const VideoPlayer = ({
       hlsRef.current.currentLevel = level;
       setCurrentQuality(level);
       setShowQuality(false);
-      setShowSettings(false);
     }
   };
 
-  const toggleSettings = (e: React.MouseEvent) => {
+  const toggleQuality = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setShowSettings(!showSettings);
-    setShowQuality(false);
+    setShowQuality(!showQuality);
   };
 
   const formatTime = (seconds: number): string => {
@@ -428,6 +425,13 @@ const VideoPlayer = ({
     return `${level.height}p`;
   };
 
+  const formatBitrate = (bitrate: number): string => {
+    if (bitrate > 1000000) {
+      return `${(bitrate / 1000000).toFixed(1)} Mbps`;
+    }
+    return `${Math.round(bitrate / 1000)} kbps`;
+  };
+
   useEffect(() => {
     const handleFullscreenChange = () => {
       setFullscreen(!!document.fullscreenElement);
@@ -437,7 +441,7 @@ const VideoPlayer = ({
       setPip(!!document.pictureInPictureElement);
     };
 
-        document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('enterpictureinpicture', handlePiPChange);
     document.addEventListener('leavepictureinpicture', handlePiPChange);
 
@@ -543,58 +547,45 @@ const VideoPlayer = ({
                 </div>
                 
                 <div className="controls-right">
-                  {/* Settings button - only show when quality levels are available */}
+                  {/* Quality button - only show when quality levels are available */}
                   {qualityLevels.length > 0 && (
                     <div className="relative">
                       <button 
-                        className={`control-button ${showSettings ? 'active' : ''}`}
-                        onClick={toggleSettings}
+                        className={`control-button ${showQuality ? 'active' : ''}`}
+                        onClick={toggleQuality}
                       >
                         <SettingsIcon />
                       </button>
                       
-                      {/* Settings menu */}
-                      {showSettings && (
-                        <div className="quality-menu" style={{ display: 'block' }}>
-                          <div className="quality-menu-header">Settings</div>
-                          
-                          {/* Quality option */}
-                          <div 
-                            className="quality-option"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowQuality(!showQuality);
-                            }}
-                          >
-                            <span>Quality</span>
-                            <span className="text-xs">
-                              {currentQuality === -1 ? 'Auto' : getQualityLabel(qualityLevels[currentQuality])}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Quality submenu */}
+                      {/* Quality menu with improved design */}
                       {showQuality && (
-                        <div className="quality-menu" style={{ display: 'block', right: '160px' }}>
-                          <div className="quality-menu-header">Quality</div>
-                          <div 
-                            className={`quality-option ${currentQuality === -1 ? 'active' : ''}`}
-                            onClick={() => handleQualityChange(-1)}
-                          >
-                            <span>Auto</span>
-                            {currentQuality === -1 && <CheckIcon size={16} />}
-                          </div>
-                          {qualityLevels.map((level) => (
+                        <div className="quality-menu-enhanced" style={{ display: 'block' }}>
+                          <div className="quality-menu-header">Video Quality</div>
+                          <div className="quality-options-list">
                             <div 
-                              key={level.level}
-                              className={`quality-option ${currentQuality === level.level ? 'active' : ''}`}
-                              onClick={() => handleQualityChange(level.level)}
+                              className={`quality-option-enhanced ${currentQuality === -1 ? 'active' : ''}`}
+                              onClick={() => handleQualityChange(-1)}
                             >
-                              <span>{getQualityLabel(level)}</span>
-                              {currentQuality === level.level && <CheckIcon size={16} />}
+                              <div className="quality-option-main">
+                                <span className="quality-label">Auto</span>
+                                {currentQuality === -1 && <CheckIcon size={18} className="quality-check" />}
+                              </div>
+                              <span className="quality-bitrate">Best quality</span>
                             </div>
-                          ))}
+                            {qualityLevels.map((level) => (
+                              <div 
+                                key={level.level}
+                                className={`quality-option-enhanced ${currentQuality === level.level ? 'active' : ''}`}
+                                onClick={() => handleQualityChange(level.level)}
+                              >
+                                <div className="quality-option-main">
+                                  <span className="quality-label">{getQualityLabel(level)}</span>
+                                  {currentQuality === level.level && <CheckIcon size={18} className="quality-check" />}
+                                </div>
+                                <span className="quality-bitrate">{formatBitrate(level.bitrate)}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
