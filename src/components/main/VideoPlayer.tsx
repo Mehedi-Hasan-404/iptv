@@ -14,19 +14,6 @@ import {
   CheckIcon
 } from './Icons';
 
-// Type declaration for Screen Orientation API
-interface ScreenOrientationAPI {
-  lock?: (orientation: string) => Promise<void>;
-  unlock?: () => void;
-}
-
-// Extend the existing Screen interface
-declare global {
-  interface Screen {
-    orientation?: ScreenOrientation & ScreenOrientationAPI;
-  }
-}
-
 interface VideoPlayerProps {
   streamUrl: string;
   streamUrl2?: string;
@@ -547,13 +534,11 @@ const VideoPlayer = ({
         // Request fullscreen
         await playerWrapperRef.current.requestFullscreen();
         
-        // Force landscape orientation on mobile with proper type checking
-        if (screen?.orientation?.lock) {
-          try {
-            await screen.orientation.lock('landscape');
-          } catch (e) {
-            console.log('Orientation lock not supported');
-          }
+        // Force landscape orientation on mobile (gracefully handle if not supported)
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock('landscape').catch(e => {
+            console.log('Orientation lock not supported:', e);
+          });
         }
         
         setFullscreen(true);
@@ -561,13 +546,11 @@ const VideoPlayer = ({
         // Exit fullscreen
         await document.exitFullscreen();
         
-        // Unlock orientation with proper type checking
-        if (screen?.orientation?.unlock) {
-          try {
-            screen.orientation.unlock();
-          } catch (e) {
-            console.log('Orientation unlock not supported');
-          }
+        // Unlock orientation (gracefully handle if not supported)
+        if (screen.orientation && screen.orientation.unlock) {
+          screen.orientation.unlock().catch(e => {
+            console.log('Orientation unlock not supported:', e);
+          });
         }
         
         setFullscreen(false);
