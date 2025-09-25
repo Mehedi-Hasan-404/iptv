@@ -535,10 +535,14 @@ const VideoPlayer = ({
         await playerWrapperRef.current.requestFullscreen();
         
         // Force landscape orientation on mobile (gracefully handle if not supported)
-        if (screen.orientation && screen.orientation.lock) {
-          screen.orientation.lock('landscape').catch(e => {
-            console.log('Orientation lock not supported:', e);
-          });
+        try {
+          // @ts-ignore: Type checking is too strict here for experimental APIs
+          if (screen.orientation && typeof screen.orientation.lock === 'function') {
+            // @ts-ignore
+            await screen.orientation.lock('landscape');
+          }
+        } catch (e) {
+          console.log('Orientation lock not supported:', e);
         }
         
         setFullscreen(true);
@@ -547,10 +551,14 @@ const VideoPlayer = ({
         await document.exitFullscreen();
         
         // Unlock orientation (gracefully handle if not supported)
-        if (screen.orientation && screen.orientation.unlock) {
-          screen.orientation.unlock().catch(e => {
-            console.log('Orientation unlock not supported:', e);
-          });
+        try {
+          // @ts-ignore: Type checking is too strict here for experimental APIs
+          if (screen.orientation && typeof screen.orientation.unlock === 'function') {
+            // @ts-ignore
+            screen.orientation.unlock();
+          }
+        } catch (e) {
+          console.log('Orientation unlock not supported:', e);
         }
         
         setFullscreen(false);
