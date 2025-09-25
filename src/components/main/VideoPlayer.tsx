@@ -88,14 +88,12 @@ const VideoPlayer = ({
            lowerUrl.includes('application/vnd.apple.mpegurl');
   };
 
-  // Main Player Initialization Logic
+  // Main Player Initialization Logic (This part is correct and remains)
   useEffect(() => {
     if (!videoRef.current || !isClient) return;
 
     const videoElement = videoRef.current;
     const currentStreamUrl = servers[currentServer - 1].url;
-
-    // Determine if we should use the proxy from the start or due to a fallback
     const shouldUseProxy = forceProxy || useProxy;
 
     let sourceUrl: string;
@@ -123,11 +121,7 @@ const VideoPlayer = ({
 
     if (isHLSStream(currentStreamUrl) || isM3UPlaylist) {
       if (Hls.isSupported()) {
-        const hls = new Hls({
-          debug: false,
-          enableWorker: true,
-        });
-
+        const hls = new Hls({ debug: false, enableWorker: true });
         hlsRef.current = hls;
 
         hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
@@ -140,20 +134,16 @@ const VideoPlayer = ({
         });
 
         hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => setCurrentQuality(data.level));
-
         hls.on(Hls.Events.ERROR, (event, data) => {
           console.error('HLS Error:', data);
           if (data.fatal) {
-            // If direct connection fails with a network error, try the proxy next
             if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !shouldUseProxy) {
               console.log('Direct connection failed. Retrying with proxy...');
-              setUseProxy(true); // This will trigger a re-run of the useEffect
-            }
-            // If proxy fails or it's another type of fatal error, try the next server
-            else if (currentServer < servers.length) {
+              setUseProxy(true);
+            } else if (currentServer < servers.length) {
               console.log(`Server ${currentServer} failed. Trying next server...`);
               setCurrentServer(prev => prev + 1);
-              setUseProxy(false); // Reset proxy attempt for the new server
+              setUseProxy(false);
             } else {
               setError('Unable to play this stream from any server.');
               setIsLoading(false);
@@ -164,23 +154,14 @@ const VideoPlayer = ({
         hls.loadSource(sourceUrl);
         hls.attachMedia(videoElement);
       } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
-        // Native HLS support (Safari)
         videoElement.src = sourceUrl;
-        videoElement.addEventListener('loadedmetadata', () => {
-          setIsLoading(false);
-          playVideo();
-        });
+        videoElement.addEventListener('loadedmetadata', () => { setIsLoading(false); playVideo(); });
       }
     } else {
-      // Direct MP4 or other video format
       videoElement.src = sourceUrl;
-      videoElement.addEventListener('loadedmetadata', () => {
-        setIsLoading(false);
-        playVideo();
-      });
+      videoElement.addEventListener('loadedmetadata', () => { setIsLoading(false); playVideo(); });
     }
     
-    // Fallback error handler for non-HLS streams or native playback
     const genericErrorHandler = () => {
       if (currentServer < servers.length) {
         setCurrentServer(prev => prev + 1);
@@ -192,17 +173,13 @@ const VideoPlayer = ({
     };
     videoElement.addEventListener('error', genericErrorHandler);
 
-    // Cleanup function
     return () => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
+      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
       videoElement.removeEventListener('error', genericErrorHandler);
       videoElement.src = '';
     };
 
-  }, [isClient, currentServer, useProxy, forceProxy]); // Re-run effect when these change
+  }, [isClient, currentServer, useProxy, forceProxy]);
 
   const handleRetry = () => {
     setCurrentServer(1);
@@ -210,7 +187,7 @@ const VideoPlayer = ({
     setError(null);
   };
   
-  // Controls visibility logic (no changes here)
+  // **FIXED**: Restored correct controls visibility logic
   useEffect(() => {
     const playerElement = playerWrapperRef.current;
     if (!playerElement) return;
@@ -232,31 +209,42 @@ const VideoPlayer = ({
       controlsTimeoutRef.current = setTimeout(hideControls, 3000);
     };
 
+    const handlePlayerClick = (event: MouseEvent) => {
+      // Prevent click on controls from toggling visibility
+      if ((event.target as HTMLElement).closest('.custom-controls, .center-controls, .top-controls')) {
+        return;
+      }
+      if (showControls) {
+        hideControls();
+      } else {
+        showControlsTemporarily();
+      }
+    };
+
     const handleMouseMove = () => showControlsTemporarily();
-    playerElement.addEventListener('mousemove', handleMouseMove);
-    playerElement.addEventListener('mouseenter', handleMouseMove);
     
-    // Initial hide timeout
+    playerElement.addEventListener('click', handlePlayerClick);
+    playerElement.addEventListener('mousemove', handleMouseMove);
+    playerElement.addEventListener('mouseleave', hideControls);
+    
     controlsTimeoutRef.current = setTimeout(hideControls, 3000);
 
     return () => {
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+      playerElement.removeEventListener('click', handlePlayerClick);
       playerElement.removeEventListener('mousemove', handleMouseMove);
-      playerElement.removeEventListener('mouseenter', handleMouseMove);
+      playerElement.removeEventListener('mouseleave', hideControls);
     };
   }, [showControls]);
 
-
-  // Time and buffer update logic (no changes here)
+  // Time and buffer update logic
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onWaiting = () => setIsLoading(true);
     const onPlaying = () => setIsLoading(false);
-    
     const updateTime = () => {
       setCurrentTime(video.currentTime);
       setDuration(video.duration);
@@ -264,27 +252,21 @@ const VideoPlayer = ({
         setBuffered((video.buffered.end(video.buffered.length - 1) / video.duration) * 100);
       }
     };
-    
     video.addEventListener('play', onPlay);
     video.addEventListener('pause', onPause);
     video.addEventListener('waiting', onWaiting);
     video.addEventListener('playing', onPlaying);
     video.addEventListener('timeupdate', updateTime);
-    video.addEventListener('loadedmetadata', updateTime);
-    video.addEventListener('progress', updateTime);
-
     return () => {
       video.removeEventListener('play', onPlay);
       video.removeEventListener('pause', onPause);
       video.removeEventListener('waiting', onWaiting);
       video.removeEventListener('playing', onPlaying);
       video.removeEventListener('timeupdate', updateTime);
-      video.removeEventListener('loadedmetadata', updateTime);
-      video.removeEventListener('progress', updateTime);
     };
   }, []);
   
-  // Fullscreen and PiP handlers (no changes here)
+  // Fullscreen and PiP handlers
   useEffect(() => {
     const handleFullscreenChange = () => setFullscreen(!!document.fullscreenElement);
     const handlePiPChange = () => setPip(!!document.pictureInPictureElement);
@@ -298,92 +280,63 @@ const VideoPlayer = ({
     };
   }, []);
 
-  // Control functions (play/pause, mute, seek, etc. - no changes here)
   const handlePlayPause = () => {
     if (videoRef.current) {
       videoRef.current.paused ? videoRef.current.play().catch(console.error) : videoRef.current.pause();
     }
   };
-
   const handleMute = () => {
     if (videoRef.current) {
       videoRef.current.muted = !videoRef.current.muted;
       setMuted(videoRef.current.muted);
     }
   };
-
   const toggleFullscreen = async () => {
     if (!playerWrapperRef.current) return;
     try {
-      if (!document.fullscreenElement) {
-        await playerWrapperRef.current.requestFullscreen();
-      } else {
-        await document.exitFullscreen();
-      }
-    } catch (error) {
-      console.error('Fullscreen error:', error);
-    }
+      if (!document.fullscreenElement) await playerWrapperRef.current.requestFullscreen();
+      else await document.exitFullscreen();
+    } catch (error) { console.error('Fullscreen error:', error); }
   };
-
   const togglePiP = async () => {
     if (!videoRef.current) return;
     try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-      } else if (document.pictureInPictureEnabled) {
-        await videoRef.current.requestPictureInPicture();
-      }
-    } catch (error) {
-      console.error('PiP error:', error);
-    }
+      if (document.pictureInPictureElement) await document.exitPictureInPicture();
+      else if (document.pictureInPictureEnabled) await videoRef.current.requestPictureInPicture();
+    } catch (error) { console.error('PiP error:', error); }
   };
-
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!progressRef.current || !videoRef.current || isLive) return;
     const rect = progressRef.current.getBoundingClientRect();
     const pos = (e.clientX - rect.left) / rect.width;
     videoRef.current.currentTime = pos * duration;
   };
-  
   const handleQualityChange = (level: number) => {
-    if (hlsRef.current) {
-      hlsRef.current.currentLevel = level;
-      setCurrentQuality(level);
-    }
-    setShowQuality(false);
-    setShowSettings(false);
+    if (hlsRef.current) hlsRef.current.currentLevel = level;
+    setShowQuality(false); setShowSettings(false);
   };
-  
   const handleServerChange = (serverIndex: number) => {
     if (serverIndex !== currentServer) {
       setCurrentServer(serverIndex);
-      setUseProxy(false); // Reset proxy state when manually changing servers
+      setUseProxy(false);
     }
-    setShowServers(false);
-    setShowSettings(false);
+    setShowServers(false); setShowSettings(false);
   };
-
   const toggleSettings = () => {
     if (showSettings) {
-      setShowSettings(false);
-      setShowQuality(false);
-      setShowServers(false);
+      setShowSettings(false); setShowQuality(false); setShowServers(false);
     } else {
       setShowSettings(true);
     }
   };
-
   const formatTime = (seconds: number): string => {
     if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
+    if (hours > 0) return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
-
   const getQualityLabel = (level: QualityLevel): string => {
     if (level.height >= 2160) return '4K';
     if (level.height >= 1080) return '1080p';
@@ -396,52 +349,35 @@ const VideoPlayer = ({
     return <div className="video-player"><div className="video-wrapper bg-black" /></div>;
   }
 
-  // JSX rendering (mostly unchanged, logic is handled above)
+  // **FIXED**: Restored correct JSX structure
   return (
     <div 
       ref={playerWrapperRef} 
       className={`video-player ${showControls ? 'show-controls' : ''} ${playing ? 'playing' : 'paused'} ${pip ? 'pip-active' : ''}`}
       onDoubleClick={toggleFullscreen}
-      onClick={handlePlayPause}
     >
       <div className="video-wrapper">
         {error ? (
           <div className="w-full h-full flex flex-col items-center justify-center bg-black text-white p-4 text-center">
-            <div className="max-w-md">
-              <h3 className="text-xl font-semibold mb-2">Stream Error</h3>
-              <p className="mb-4 text-sm">{error}</p>
-              <div className="flex gap-2 justify-center">
-                <button onClick={handleRetry} className="play-btn flex items-center gap-2">
-                  <RotateIcon size={18} /> Retry
-                </button>
-              </div>
-            </div>
+            <h3 className="text-xl font-semibold mb-2">Stream Error</h3>
+            <p className="mb-4 text-sm">{error}</p>
+            <button onClick={handleRetry} className="play-btn flex items-center gap-2">
+              <RotateIcon size={18} /> Retry
+            </button>
           </div>
         ) : (
-          <video
-            ref={videoRef}
-            muted={muted}
-            playsInline
-            width="100%"
-            height="100%"
-            style={{ objectFit: 'contain' }}
-            crossOrigin="anonymous"
-          />
+          <video ref={videoRef} muted playsInline width="100%" height="100%" style={{ objectFit: 'contain' }} crossOrigin="anonymous" />
         )}
         
         {isLoading && !error && (
           <div className="player-loading-indicator show">
             <div className="loading-spinner"></div>
-            <div className="loading-text">
-              Loading {servers[currentServer - 1]?.label || 'Stream'}...
-            </div>
+            <div className="loading-text">Loading {servers[currentServer - 1]?.label || 'Stream'}...</div>
           </div>
         )}
 
-        {/* Prevent controls from capturing the main play/pause click */}
-        <div className="custom-controls" onClick={e => e.stopPropagation()}>
-          {!error && (
-            <>
+        {!error && (
+          <>
             <div className="top-controls">
               <div className="player-title">{channelName}</div>
               {isLive && <div className="live-indicator">LIVE</div>}
@@ -469,79 +405,42 @@ const VideoPlayer = ({
                   <button className="control-button" onClick={handleMute}>
                     {muted ? <VolumeMuteIcon /> : <VolumeMaxIcon />}
                   </button>
-                  {!isLive && (
-                    <div className="time-display">{formatTime(currentTime)} / {formatTime(duration)}</div>
-                  )}
+                  {!isLive && <div className="time-display">{formatTime(currentTime)} / {formatTime(duration)}</div>}
                 </div>
                 
                 <div className="controls-right">
                   {(qualityLevels.length > 0 || servers.length > 1) && (
                     <div className="relative">
-                      <button className={`control-button ${showSettings ? 'active' : ''}`} onClick={toggleSettings}>
-                        <SettingsIcon />
-                      </button>
-                      
+                      <button className={`control-button ${showSettings ? 'active' : ''}`} onClick={toggleSettings}><SettingsIcon /></button>
                       {showSettings && (
                         <div className="quality-menu" style={{ display: 'block' }}>
                           <div className="quality-menu-header">Settings</div>
-                          {qualityLevels.length > 0 && (
-                            <div className="quality-option" onClick={() => { setShowQuality(true); setShowServers(false); }}>
-                              <span>Quality</span>
-                              <span className="text-xs">{currentQuality === -1 ? 'Auto' : getQualityLabel(qualityLevels[currentQuality])}</span>
-                            </div>
-                          )}
-                          {servers.length > 1 && (
-                            <div className="quality-option" onClick={() => { setShowServers(true); setShowQuality(false); }}>
-                              <span>Server</span>
-                              <span className="text-xs">{servers[currentServer - 1]?.label}</span>
-                            </div>
-                          )}
+                          {qualityLevels.length > 0 && <div className="quality-option" onClick={() => { setShowQuality(true); setShowServers(false); }}><span>Quality</span><span className="text-xs">{currentQuality === -1 ? 'Auto' : getQualityLabel(qualityLevels[currentQuality])}</span></div>}
+                          {servers.length > 1 && <div className="quality-option" onClick={() => { setShowServers(true); setShowQuality(false); }}><span>Server</span><span className="text-xs">{servers[currentServer - 1]?.label}</span></div>}
                         </div>
                       )}
-                      
                       {showQuality && (
                         <div className="quality-menu" style={{ display: 'block', right: '120px' }}>
                           <div className="quality-menu-header">Quality</div>
-                          <div className={`quality-option ${currentQuality === -1 ? 'active' : ''}`} onClick={() => handleQualityChange(-1)}>
-                            <span>Auto</span>
-                            {currentQuality === -1 && <CheckIcon size={16} />}
-                          </div>
-                          {qualityLevels.map((level) => (
-                            <div key={level.level} className={`quality-option ${currentQuality === level.level ? 'active' : ''}`} onClick={() => handleQualityChange(level.level)}>
-                              <span>{getQualityLabel(level)}</span>
-                              {currentQuality === level.level && <CheckIcon size={16} />}
-                            </div>
-                          ))}
+                          <div className={`quality-option ${currentQuality === -1 ? 'active' : ''}`} onClick={() => handleQualityChange(-1)}><span>Auto</span>{currentQuality === -1 && <CheckIcon size={16} />}</div>
+                          {qualityLevels.map((level) => (<div key={level.level} className={`quality-option ${currentQuality === level.level ? 'active' : ''}`} onClick={() => handleQualityChange(level.level)}><span>{getQualityLabel(level)}</span>{currentQuality === level.level && <CheckIcon size={16} />}</div>))}
                         </div>
                       )}
-                      
                       {showServers && (
                         <div className="quality-menu" style={{ display: 'block', right: '120px' }}>
                           <div className="quality-menu-header">Select Server</div>
-                          {servers.map((server, index) => (
-                            <div key={index} className={`quality-option ${currentServer === index + 1 ? 'active' : ''}`} onClick={() => handleServerChange(index + 1)}>
-                              <span>{server.label}</span>
-                              {currentServer === index + 1 && <CheckIcon size={16} />}
-                            </div>
-                          ))}
+                          {servers.map((server, index) => (<div key={index} className={`quality-option ${currentServer === index + 1 ? 'active' : ''}`} onClick={() => handleServerChange(index + 1)}><span>{server.label}</span>{currentServer === index + 1 && <CheckIcon size={16} />}</div>))}
                         </div>
                       )}
                     </div>
                   )}
-                  
-                  {document.pictureInPictureEnabled && (
-                    <button className="control-button" onClick={togglePiP} title="Picture in Picture"><PipIcon /></button>
-                  )}
-                  
-                  <button className="control-button" onClick={toggleFullscreen}>
-                    {fullscreen ? <FullscreenExitIcon /> : <FullscreenEnterIcon />}
-                  </button>
+                  {document.pictureInPictureEnabled && <button className="control-button" onClick={togglePiP} title="Picture in Picture"><PipIcon /></button>}
+                  <button className="control-button" onClick={toggleFullscreen}>{fullscreen ? <FullscreenExitIcon /> : <FullscreenEnterIcon />}</button>
                 </div>
               </div>
             </div>
-            </>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </div>
   );
