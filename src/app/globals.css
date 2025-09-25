@@ -356,122 +356,23 @@ video{width:100%;height:100%;display:block;background:#000;object-fit:contain;}
 .video-player.paused .center-play-btn{opacity:1!important;}
 
 /* Top Controls */
-.top-controls{position:absolute;top:0;left:0;right:0;background:linear-gradient(to bottom,rgba(0,0,0,0.9),transparent);padding:15px;opacity:0;transition:opacity 0.3s;display:flex;justify-content:space-between;align-items:center;z-index:15;}
-.video-player.show-controls .top-controls{opacity:1;}
-
-/* Enhanced Quality Menu */
+.top-controls{position:absolute;top:0;left:0;right:0;backgr/* Replace the old quality menu styles with this simpler version */
 .quality-menu-enhanced {
   display: none;
-  position: absolute;
-  bottom: 60px;
-  right: 0;
-  background: rgba(28, 28, 30, 0.98);
-  border-radius: 12px;
-  min-width: 220px;
-  max-height: 320px;
-  overflow-y: auto;
-  z-index: 21;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Simple quality menu */
+.control-button {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
   padding: 8px;
 }
 
-.quality-menu-header {
-  padding: 12px 16px 8px;
-  font-weight: 600;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.quality-options-list {
-  padding: 4px 0;
-}
-
-.quality-option-enhanced {
-  padding: 12px 16px;
-  cursor: pointer;
-  transition: all 0.2s;
-  border-radius: 8px;
-  margin: 2px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.quality-option-enhanced:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.quality-option-enhanced.active {
-  background: rgba(59, 130, 246, 0.2);
-}
-
-.quality-option-main {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.quality-label {
-  font-size: 15px;
-  font-weight: 500;
-  color: #FFFFFF;
-}
-
-.quality-bitrate {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.quality-check {
-  color: #3b82f6;
-}
-
-/* Light theme adjustments for quality menu */
-.light-theme .quality-menu-enhanced {
-  background: rgba(255, 255, 255, 0.98);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.light-theme .quality-menu-header {
-  color: rgba(0, 0, 0, 0.6);
-}
-
-.light-theme .quality-label {
-  color: #000000;
-}
-
-.light-theme .quality-bitrate {
-  color: rgba(0, 0, 0, 0.6);
-}
-
-.light-theme .quality-option-enhanced:hover {
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.light-theme .quality-option-enhanced.active {
-  background: rgba(59, 130, 246, 0.1);
-}
-
-/* Hide scrollbar in quality menu */
-.quality-menu-enhanced::-webkit-scrollbar {
-  width: 4px;
-}
-
-.quality-menu-enhanced::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.quality-menu-enhanced::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 2px;
-}
-
-.quality-menu-enhanced::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+.control-button svg {
+  width: 20px;
+  height: 20px;
 }
 
 /* Player Loading Indicator */
